@@ -1,0 +1,17 @@
+{
+  "name": "root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "tini2n",
+  "license": "ISC",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
+
+}
