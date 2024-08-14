@@ -1,0 +1,32 @@
+{
+    "name": "ffmpeg-web",
+    "version": "1.0.0",
+    "main": "index.js",
+    "license": "MIT",
+    "scripts": {
+        "start": "webpack serve --mode development",
+        "clean": "rimraf dist",
+        "build:esm": "tsc -p tsconfig.json",
+        "build:umd": "webpack --mode production",
+        "build": "yarn run clean && yarn run build:esm && yarn run build:umd"
+    },
+    "dependencies": {
+        "@types/node": "^22.2.0",
+        "@types/uuid": "^10.0.0",
+        "uuid": "^10.0.0"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.25.2",
+        "@babel/preset-env": "^7.25.3",
+        "babel-loader": "^9.1.3",
+        "copy-webpack-plugin": "^12.0.2",
+        "file-loader": "^6.2.0",
+        "rimraf": "^5.0.1",
+        "ts-loader": "^9.5.1",
+        "typescript": "^5.5.4",
+        "webpack": "^5.93.0",
+        "webpack-cli": "^5.1.4",
+        "webpack-dev-server": "^5.0.4",
+        "worker-loader": "^3.0.8"
+    }
+}

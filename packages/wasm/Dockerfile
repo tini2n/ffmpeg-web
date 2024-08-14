@@ -1,5 +1,5 @@
 # Use an official emscripten image as the base image
-FROM emscripten/emsdk:3.1.11
+FROM emscripten/emsdk:3.1.64
 
 # Set environment variables
 ENV EMSDK /emsdk
@@ -11,10 +11,10 @@ RUN apt-get update && \
     apt-get install -y git build-essential automake libtool pkg-config zlib1g-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-    
+
 RUN git clone https://git.ffmpeg.org/ffmpeg.git /src
 
-    
+
 RUN ls -la
 
 # Create and set the working directory
