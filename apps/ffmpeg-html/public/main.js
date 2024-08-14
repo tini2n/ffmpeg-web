@@ -30,26 +30,26 @@
             console.log('File exist: ', ffmpeg.fileExists(inputFileName));
 
             // webm to mp4
-            await ffmpeg.exec([
-                '-loglevel',
-                'debug',
-                '-nostdin',
-                '-y',
-                '-i',
-                inputFileName,
-                '-preset',
-                'ultrafast',
-                '-movflags',
-                '+faststart',
-                '-c:v',
-                'libx264',
-                '-c:a',
-                'copy',
-                outputFileName,
-            ]);
+            // await ffmpeg.exec([
+            //     '-loglevel',
+            //     'debug',
+            //     '-nostdin',
+            //     '-y',
+            //     '-i',
+            //     inputFileName,
+            //     '-preset',
+            //     'ultrafast',
+            //     '-movflags',
+            //     '+faststart',
+            //     '-c:v',
+            //     'libx264',
+            //     '-c:a',
+            //     'copy',
+            //     outputFileName,
+            // ]);
 
             // mp4 to mp4
-            await ffmpeg.runCommand([
+            await ffmpeg.exec([
                 '-loglevel',
                 'debug',
                 '-nostdin',
