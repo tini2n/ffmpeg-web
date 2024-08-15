@@ -4,10 +4,12 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 module.exports = {
     entry: './src/index.ts',
     output: {
-        filename: 'bundle.js',
+        filename: '[name].js',
+        chunkFilename: '[name].js',
         path: path.resolve(__dirname, 'dist'),
         library: 'FFmpegWeb',
         libraryTarget: 'umd',
+        clean: true,
     },
     module: {
         rules: [
@@ -21,7 +23,7 @@ module.exports = {
                 type: 'asset/resource',
             },
             {
-                test: /\.worker\.js$/,
+                test: /\.worker\.ts$/,
                 use: {
                     loader: 'worker-loader',
                     options: {
@@ -44,7 +46,7 @@ module.exports = {
     },
     plugins: [
         new CopyWebpackPlugin({
-            patterns: [{ from: 'src/wasm', to: './' }],
+            patterns: [{ from: 'src/wasm/ffmpeg.wasm', to: './' }],
         }),
     ],
     experiments: {

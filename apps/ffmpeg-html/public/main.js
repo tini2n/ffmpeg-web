@@ -1,12 +1,11 @@
 (async () => {
-    console.log('Hello from main.js');
+    console.log('Hello from main.js', FFmpegWeb);
     const { FFmpeg } = FFmpegWeb;
 
     const ffmpeg = new FFmpeg();
     console.log('Loading FFmpeg module...', ffmpeg);
 
     await ffmpeg.load();
-
     await ffmpeg.exec(['-version']);
 
     ffmpeg.createDir('/working');
@@ -23,32 +22,13 @@
             ffmpeg.writeFile(inputFileName, fileData);
             console.log('File written to FS:', inputFileName);
 
-            var output = ffmpeg.module.FS.readFile(`/working/${file.name}`);
+            var output = ffmpeg.readFile(`/working/${file.name}`);
             console.log('Input file size:', output.length);
 
             console.log('FS content:', ffmpeg.listFiles('/working'));
             console.log('File exist: ', ffmpeg.fileExists(inputFileName));
 
             // webm to mp4
-            // await ffmpeg.exec([
-            //     '-loglevel',
-            //     'debug',
-            //     '-nostdin',
-            //     '-y',
-            //     '-i',
-            //     inputFileName,
-            //     '-preset',
-            //     'ultrafast',
-            //     '-movflags',
-            //     '+faststart',
-            //     '-c:v',
-            //     'libx264',
-            //     '-c:a',
-            //     'copy',
-            //     outputFileName,
-            // ]);
-
-            // mp4 to mp4
             await ffmpeg.exec([
                 '-loglevel',
                 'debug',
@@ -56,32 +36,55 @@
                 '-y',
                 '-i',
                 inputFileName,
-                '-c',
+                '-preset',
+                'ultrafast',
+                '-movflags',
+                '+faststart',
+                '-c:v',
+                'libx264',
+                '-preset',
+                'ultrafast',
+                '-c:a',
                 'copy',
+                '-r',
+                '30',
                 outputFileName,
             ]);
 
+            // mp4 to mp4
+            // await ffmpeg.exec([
+            //     '-loglevel',
+            //     'debug',
+            //     '-nostdin',
+            //     '-y',
+            //     '-i',
+            //     inputFileName,
+            //     '-c',
+            //     'copy',
+            //     outputFileName,
+            // ]);
+
             console.log('After run: /working', ffmpeg.listFiles('/working'));
 
-            // if (ffmpeg.fileExists(outputFileName)) {
-            //     console.log('Conversion finished successfully');
+            if (ffmpeg.fileExists(outputFileName)) {
+                console.log('Conversion finished successfully');
 
-            //     // Read the output file from the FFmpeg file system
-            //     const outputData = ffmpeg.readFile(outputFileName);
+                // Read the output file from the FFmpeg file system
+                const outputData = ffmpeg.readFile(outputFileName);
 
-            //     // Create a Blob from the output data and generate a download link
-            //     const outputBlob = new Blob([outputData], {
-            //         type: 'video/mp4',
-            //     });
-            //     const downloadUrl = URL.createObjectURL(outputBlob);
+                // Create a Blob from the output data and generate a download link
+                const outputBlob = new Blob([outputData], {
+                    type: 'video/mp4',
+                });
+                const downloadUrl = URL.createObjectURL(outputBlob);
 
-            //     const downloadLink = document.createElement('a');
-            //     downloadLink.href = downloadUrl;
-            //     downloadLink.download = 'output.mp4';
-            //     downloadLink.textContent = 'Download MP4';
+                const downloadLink = document.createElement('a');
+                downloadLink.href = downloadUrl;
+                downloadLink.download = 'output.mp4';
+                downloadLink.textContent = 'Download MP4';
 
-            //     document.body.appendChild(downloadLink);
-            // }
+                document.body.appendChild(downloadLink);
+            }
         } catch (error) {
             console.error('Error running FFmpeg command:', error);
         }

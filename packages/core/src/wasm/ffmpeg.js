@@ -28,7 +28,7 @@ var readyPromise = new Promise((resolve, reject) => {
   readyPromiseResolve = resolve;
   readyPromiseReject = reject;
 });
-["_exit","_memory","___indirect_function_table","_ff_h264_cabac_tables","_main","onRuntimeInitialized"].forEach((prop) => {
+["_exit","_abort","_emscripten_exit_with_live_runtime","_memory","___indirect_function_table","_ff_h264_cabac_tables","_main","onRuntimeInitialized"].forEach((prop) => {
   if (!Object.getOwnPropertyDescriptor(readyPromise, prop)) {
     Object.defineProperty(readyPromise, prop, {
       get: () => abort('You are getting ' + prop + ' on the Promise object, instead of the instance. Use .then() to get called back with the instance, see the MODULARIZE docs in src/settings.js'),
@@ -72,16 +72,7 @@ var Module = {
   },
   noInitialRun: true,
   onRuntimeInitialized: function() {
-    console.log('Runtime initialized');
-//    const ffmpeg = Module.cwrap("_emscripten_proxy_main", "number", [ "number", "number" ]);
-//    const args = [ "ffmpeg", '-h' ];
-//    const argsPtr = _malloc(args.length * Uint32Array.BYTES_PER_ELEMENT);
-//    args.forEach((s, idx) => {
-//      const buf = _malloc(s.length + 1);
-//      Module.writeAsciiToMemory(s, buf);
-//      Module.setValue(argsPtr + (Uint32Array.BYTES_PER_ELEMENT * idx), buf, "i32");
-//    });
-//    ffmpeg(args.length, argsPtr);
+    console.log('FFmpeg: Runtime initialized');
   }
 };
 // end include: /Users/tini2n/Projects/playground/wasm/FFmpeg/pre.js
@@ -344,6 +335,9 @@ function assert(condition, text) {
 
 // We used to include malloc/free by default in the past. Show a helpful error in
 // builds with assertions.
+function _malloc() {
+  abort('malloc() called but not included in the build - add `_malloc` to EXPORTED_FUNCTIONS');
+}
 function _free() {
   // Show a helpful error since we used to include free by default in the past.
   abort('free() called but not included in the build - add `_free` to EXPORTED_FUNCTIONS');
@@ -677,7 +671,7 @@ function createExportWrapper(name, nargs) {
 // include: runtime_exceptions.js
 // end include: runtime_exceptions.js
 function findWasmBinary() {
-    var f = 'ffmpeg.wasm';
+    var f = 'dist/ffmpeg.wasm';
     if (!isDataURI(f)) {
       return locateFile(f);
     }
@@ -1530,10 +1524,7 @@ function dbg(...args) {
       return Math.ceil(size / alignment) * alignment;
     };
   var mmapAlloc = (size) => {
-      size = alignMemory(size, 65536);
-      var ptr = _emscripten_builtin_memalign(65536, size);
-      if (!ptr) return 0;
-      return zeroMemory(ptr, size);
+      abort('internal error: mmapAlloc called but `emscripten_builtin_memalign` native symbol not exported');
     };
   var MEMFS = {
   ops_table:null,
@@ -4320,49 +4311,6 @@ function dbg(...args) {
   };
 
   
-  
-  
-  
-  
-  function __mmap_js(len, prot, flags, fd, offset, allocated, addr) {
-    offset = bigintToI53Checked(offset);
-  
-    
-  try {
-  
-      if (isNaN(offset)) return 61;
-      var stream = SYSCALLS.getStreamFromFD(fd);
-      var res = FS.mmap(stream, len, offset, prot, flags);
-      var ptr = res.ptr;
-      HEAP32[((allocated)>>2)] = res.allocated;
-      HEAPU32[((addr)>>2)] = ptr;
-      return 0;
-    } catch (e) {
-    if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
-    return -e.errno;
-  }
-  ;
-  }
-
-  
-  function __munmap_js(addr, len, prot, flags, fd, offset) {
-    offset = bigintToI53Checked(offset);
-  
-    
-  try {
-  
-      var stream = SYSCALLS.getStreamFromFD(fd);
-      if (prot & 2) {
-        SYSCALLS.doMsync(addr, stream, len, flags, offset);
-      }
-    } catch (e) {
-    if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
-    return -e.errno;
-  }
-  ;
-  }
-
-  
   var __tzset_js = (timezone, daylight, std_name, dst_name) => {
       // TODO: Use (malleable) environment variables instead of system settings.
       var currentYear = new Date().getFullYear();
@@ -4420,14 +4368,6 @@ function dbg(...args) {
 
   var _emscripten_err = (str) => err(UTF8ToString(str));
 
-  var getHeapMax = () =>
-      // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
-      // full 4GB Wasm memories, the size will wrap back to 0 bytes in Wasm side
-      // for any code that deals with heap sizes, which would require special
-      // casing all heap size related code to treat 0 specially.
-      2147483648;
-  var _emscripten_get_heap_max = () => getHeapMax();
-
   var _emscripten_get_now;
       // Modern environment where performance.now() is supported:
       // N.B. a shorter form "_emscripten_get_now = performance.now;" is
@@ -4435,6 +4375,12 @@ function dbg(...args) {
       _emscripten_get_now = () => performance.now();
   ;
 
+  var getHeapMax = () =>
+      // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
+      // full 4GB Wasm memories, the size will wrap back to 0 bytes in Wasm side
+      // for any code that deals with heap sizes, which would require special
+      // casing all heap size related code to treat 0 specially.
+      2147483648;
   
   var growMemory = (size) => {
       var b = wasmMemory.buffer;
@@ -4754,101 +4700,13 @@ function dbg(...args) {
     };
 
 
-  var getCFunc = (ident) => {
-      var func = Module['_' + ident]; // closure exported function
-      assert(func, 'Cannot call unknown function ' + ident + ', make sure it is exported');
-      return func;
-    };
-  
-  
-  var writeArrayToMemory = (array, buffer) => {
-      assert(array.length >= 0, 'writeArrayToMemory array must have a length (should be an array or typed array)')
-      HEAP8.set(array, buffer);
-    };
-  
-  
-  
-  
-  
-  
-    /**
-     * @param {string|null=} returnType
-     * @param {Array=} argTypes
-     * @param {Arguments|Array=} args
-     * @param {Object=} opts
-     */
-  var ccall = (ident, returnType, argTypes, args, opts) => {
-      // For fast lookup of conversion functions
-      var toC = {
-        'string': (str) => {
-          var ret = 0;
-          if (str !== null && str !== undefined && str !== 0) { // null string
-            // at most 4 bytes per UTF-8 code point, +1 for the trailing '\0'
-            ret = stringToUTF8OnStack(str);
-          }
-          return ret;
-        },
-        'array': (arr) => {
-          var ret = stackAlloc(arr.length);
-          writeArrayToMemory(arr, ret);
-          return ret;
-        }
-      };
-  
-      function convertReturnValue(ret) {
-        if (returnType === 'string') {
-          
-          return UTF8ToString(ret);
-        }
-        if (returnType === 'boolean') return Boolean(ret);
-        return ret;
-      }
-  
-      var func = getCFunc(ident);
-      var cArgs = [];
-      var stack = 0;
-      assert(returnType !== 'array', 'Return type should not be "array".');
-      if (args) {
-        for (var i = 0; i < args.length; i++) {
-          var converter = toC[argTypes[i]];
-          if (converter) {
-            if (stack === 0) stack = stackSave();
-            cArgs[i] = converter(args[i]);
-          } else {
-            cArgs[i] = args[i];
-          }
-        }
-      }
-      var ret = func(...cArgs);
-      function onDone(ret) {
-        if (stack !== 0) stackRestore(stack);
-        return convertReturnValue(ret);
-      }
-  
-      ret = onDone(ret);
-      return ret;
-    };
-  
-    /**
-     * @param {string=} returnType
-     * @param {Array=} argTypes
-     * @param {Object=} opts
-     */
-  var cwrap = (ident, returnType, argTypes, opts) => {
-      return (...args) => ccall(ident, returnType, argTypes, args, opts);
-    };
 
 
-  /** @param {boolean=} dontAddNull */
-  var writeAsciiToMemory = (str, buffer, dontAddNull) => {
-      for (var i = 0; i < str.length; ++i) {
-        assert(str.charCodeAt(i) === (str.charCodeAt(i) & 0xff));
-        HEAP8[buffer++] = str.charCodeAt(i);
-      }
-      // Null-terminate the string
-      if (!dontAddNull) HEAP8[buffer] = 0;
+  var _emscripten_exit_with_live_runtime = () => {
+      
+      throw 'unwind';
     };
-
+  Module['_emscripten_exit_with_live_runtime'] = _emscripten_exit_with_live_runtime;
 
   FS.createPreloadedFile = FS_createPreloadedFile;
   FS.staticInit();;
@@ -4895,17 +4753,11 @@ var wasmImports = {
   /** @export */
   _mktime_js: __mktime_js,
   /** @export */
-  _mmap_js: __mmap_js,
-  /** @export */
-  _munmap_js: __munmap_js,
-  /** @export */
   _tzset_js: __tzset_js,
   /** @export */
   emscripten_date_now: _emscripten_date_now,
   /** @export */
   emscripten_err: _emscripten_err,
-  /** @export */
-  emscripten_get_heap_max: _emscripten_get_heap_max,
   /** @export */
   emscripten_get_now: _emscripten_get_now,
   /** @export */
@@ -4930,13 +4782,9 @@ var wasmImports = {
 var wasmExports = createWasm();
 var ___wasm_call_ctors = createExportWrapper('__wasm_call_ctors', 0);
 var _fflush = createExportWrapper('fflush', 1);
+var _abort = Module['_abort'] = createExportWrapper('abort', 0);
 var _strerror = createExportWrapper('strerror', 1);
 var _main = Module['_main'] = createExportWrapper('__main_argc_argv', 2);
-var _malloc = createExportWrapper('malloc', 1);
-var _htonl = createExportWrapper('htonl', 1);
-var _htons = createExportWrapper('htons', 1);
-var _emscripten_builtin_memalign = createExportWrapper('emscripten_builtin_memalign', 2);
-var _ntohs = createExportWrapper('ntohs', 1);
 var _emscripten_stack_init = () => (_emscripten_stack_init = wasmExports['emscripten_stack_init'])();
 var _emscripten_stack_get_free = () => (_emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'])();
 var _emscripten_stack_get_base = () => (_emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'])();
@@ -4944,16 +4792,14 @@ var _emscripten_stack_get_end = () => (_emscripten_stack_get_end = wasmExports['
 var __emscripten_stack_restore = (a0) => (__emscripten_stack_restore = wasmExports['_emscripten_stack_restore'])(a0);
 var __emscripten_stack_alloc = (a0) => (__emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'])(a0);
 var _emscripten_stack_get_current = () => (_emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'])();
-var _ff_h264_cabac_tables = Module['_ff_h264_cabac_tables'] = 1020748;
+var _ff_h264_cabac_tables = Module['_ff_h264_cabac_tables'] = 358972;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===
 
 Module['callMain'] = callMain;
-Module['cwrap'] = cwrap;
-Module['setValue'] = setValue;
+Module['exitJS'] = exitJS;
 Module['FS'] = FS;
-Module['writeAsciiToMemory'] = writeAsciiToMemory;
 var missingLibrarySymbols = [
   'writeI53ToI64',
   'writeI53ToI64Clamped',
@@ -4993,6 +4839,9 @@ var missingLibrarySymbols = [
   'STACK_ALIGN',
   'POINTER_SIZE',
   'ASSERTIONS',
+  'getCFunc',
+  'ccall',
+  'cwrap',
   'uleb128Encode',
   'sigToWasmTypes',
   'generateFuncType',
@@ -5016,6 +4865,7 @@ var missingLibrarySymbols = [
   'stringToUTF32',
   'lengthBytesUTF32',
   'stringToNewUTF8',
+  'writeArrayToMemory',
   'registerKeyEventCallback',
   'maybeCStringToJsString',
   'findEventTarget',
@@ -5104,6 +4954,7 @@ var missingLibrarySymbols = [
   'ALLOC_STACK',
   'allocate',
   'writeStringToMemory',
+  'writeAsciiToMemory',
   'setErrNo',
   'demangle',
   'stackTrace',
@@ -5134,7 +4985,6 @@ var unexportedSymbols = [
   'stackAlloc',
   'ptrToString',
   'zeroMemory',
-  'exitJS',
   'getHeapMax',
   'growMemory',
   'ENV',
@@ -5163,10 +5013,9 @@ var unexportedSymbols = [
   'mmapAlloc',
   'wasmTable',
   'noExitRuntime',
-  'getCFunc',
-  'ccall',
   'freeTableIndexes',
   'functionsInTableMap',
+  'setValue',
   'getValue',
   'PATH',
   'PATH_FS',
@@ -5180,7 +5029,6 @@ var unexportedSymbols = [
   'stringToAscii',
   'UTF16Decoder',
   'stringToUTF8OnStack',
-  'writeArrayToMemory',
   'JSEvents',
   'specialHTMLTargets',
   'findCanvasEventTarget',
@@ -5223,8 +5071,6 @@ var unexportedSymbols = [
   'EGL',
   'GLEW',
   'IDBStore',
-  'SDL',
-  'SDL_gfx',
   'allocateUTF8',
   'allocateUTF8OnStack',
   'print',
