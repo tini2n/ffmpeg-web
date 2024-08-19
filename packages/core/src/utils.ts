@@ -1,4 +1,3 @@
-import { v4 as uuid } from 'uuid';
 
 // @ts-ignore
 export const readFromBlobOrFile = (blob) =>
@@ -126,6 +125,6 @@ export const toBlobURL = async (url, mimeType, progress = false, cb) => {
     return URL.createObjectURL(blob);
 };
 
-export const getUniqueID = () => {
-    return uuid();
-};
+export function getUniqueID() {
+    return Math.random().toString(36).substr(2, 9);
+}

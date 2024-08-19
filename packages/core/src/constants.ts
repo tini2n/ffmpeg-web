@@ -1,4 +1,4 @@
-export enum FF_MESSAGE_TYPES {
+export enum WORKER_MESSAGE_TYPES {
     LOAD = "LOAD",
     EXEC = "EXEC",
     WRITE_FILE = "WRITE_FILE",
@@ -24,5 +24,5 @@ export const ERRORS = {
     IMPORT_FAILURE: new Error(
         "Failed to import core FFmpeg module, check the console for more information"
     ),
-    UNKNOWN_TYPE: new Error("Unknown message type"),
+    UNKNOWN_MESSAGE_TYPE: new Error("Unknown message type"),
 }

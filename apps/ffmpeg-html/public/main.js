@@ -1,17 +1,31 @@
 (async () => {
-    console.log('Hello from main.js', FFmpegWeb);
+    console.log('Hello from main.js. Using bundle: ', FFmpegWeb);
     const { FFmpeg } = FFmpegWeb;
 
     const ffmpeg = new FFmpeg();
     console.log('Loading FFmpeg module...', ffmpeg);
 
     await ffmpeg.load();
+
+    ffmpeg.on('log', (log) => {
+        log && log.type === 'stdout'
+            ? console.log('ffmpeg:', log.message)
+            : console.error('ffmpeg:', log.message);
+    });
+
     await ffmpeg.exec(['-version']);
 
-    ffmpeg.createDir('/working');
+    await ffmpeg.createDir('/working');
 
     const fileInput = document.getElementById('inputFile');
     fileInput.addEventListener('change', async (e) => {
+        // Clean up previous download link
+        const prevLink = document.getElementById('downloadLink');
+        if (prevLink) {
+            URL.revokeObjectURL(prevLink.href);
+            prevLink.remove();
+        }
+
         try {
             const file = e.target.files[0];
             const inputFileName = `/working/${file.name}`;
@@ -19,35 +33,35 @@
 
             const fileData = await fetchFile(file);
             console.log('File read:', fileData);
-            ffmpeg.writeFile(inputFileName, fileData);
+            await ffmpeg.writeFile(inputFileName, fileData);
             console.log('File written to FS:', inputFileName);
 
-            var output = ffmpeg.readFile(`/working/${file.name}`);
-            console.log('Input file size:', output.length);
+            var output = await ffmpeg.readFile(`/working/${file.name}`);
+            console.log('Input file size:', output);
 
-            console.log('FS content:', ffmpeg.listFiles('/working'));
-            console.log('File exist: ', ffmpeg.fileExists(inputFileName));
+            console.log('FS content:', await ffmpeg.listFiles('/working'));
+            console.log('File exist: ', await ffmpeg.fileExists(inputFileName));
 
             // webm to mp4
             await ffmpeg.exec([
-                '-loglevel',
-                'debug',
                 '-nostdin',
                 '-y',
+                '-loglevel',
+                'debug',
                 '-i',
                 inputFileName,
                 '-preset',
                 'ultrafast',
-                '-movflags',
-                '+faststart',
                 '-c:v',
                 'libx264',
-                '-preset',
-                'ultrafast',
                 '-c:a',
                 'copy',
+                '-crf',
+                '23',
                 '-r',
                 '30',
+                '-threads',
+                '0',
                 outputFileName,
             ]);
 
@@ -64,13 +78,14 @@
             //     outputFileName,
             // ]);
 
-            console.log('After run: /working', ffmpeg.listFiles('/working'));
+            const res = await ffmpeg.listFiles('/working');
+            console.log('After run: /working', res);
 
             if (ffmpeg.fileExists(outputFileName)) {
                 console.log('Conversion finished successfully');
 
                 // Read the output file from the FFmpeg file system
-                const outputData = ffmpeg.readFile(outputFileName);
+                const outputData = await ffmpeg.readFile(outputFileName);
 
                 // Create a Blob from the output data and generate a download link
                 const outputBlob = new Blob([outputData], {
@@ -79,12 +94,17 @@
                 const downloadUrl = URL.createObjectURL(outputBlob);
 
                 const downloadLink = document.createElement('a');
+                downloadLink.id = 'downloadLink';
                 downloadLink.href = downloadUrl;
                 downloadLink.download = 'output.mp4';
                 downloadLink.textContent = 'Download MP4';
 
                 document.body.appendChild(downloadLink);
             }
+
+            // Clean up
+            await ffmpeg.deleteFile(inputFileName);
+            await ffmpeg.deleteFile(outputFileName);
         } catch (error) {
             console.error('Error running FFmpeg command:', error);
         }

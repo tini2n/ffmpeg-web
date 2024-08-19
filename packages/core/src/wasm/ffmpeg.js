@@ -28,7 +28,7 @@ var readyPromise = new Promise((resolve, reject) => {
   readyPromiseResolve = resolve;
   readyPromiseReject = reject;
 });
-["_exit","_abort","_emscripten_exit_with_live_runtime","_memory","___indirect_function_table","_ff_h264_cabac_tables","_main","onRuntimeInitialized"].forEach((prop) => {
+["_exit","_abort","_emscripten_exit_with_live_runtime","_malloc","_memory","___indirect_function_table","_ff_h264_cabac_tables","___set_stack_limits","_main","onRuntimeInitialized"].forEach((prop) => {
   if (!Object.getOwnPropertyDescriptor(readyPromise, prop)) {
     Object.defineProperty(readyPromise, prop, {
       get: () => abort('You are getting ' + prop + ' on the Promise object, instead of the instance. Use .then() to get called back with the instance, see the MODULARIZE docs in src/settings.js'),
@@ -70,12 +70,113 @@ var Module = {
   printErr: function(text) {
     console.error('stderr: ' + text);
   },
+  locateFile: function(path) {
+    if (path.endsWith('.wasm')) {
+      return '/dist/' + path;  // Adjust to the correct path
+    }
+
+    return path;
+  },
   noInitialRun: true,
   onRuntimeInitialized: function() {
     console.log('FFmpeg: Runtime initialized');
   }
 };
-// end include: /Users/tini2n/Projects/playground/wasm/FFmpeg/pre.js
+
+const NULL = 0;
+const SIZE_I32 = Uint32Array.BYTES_PER_ELEMENT;
+const DEFAULT_ARGS = ["./ffmpeg", "-nostdin", "-y"];
+
+Module["NULL"] = NULL;
+Module["SIZE_I32"] = SIZE_I32;
+Module["DEFAULT_ARGS"] = DEFAULT_ARGS;
+
+/**
+ * Variables
+ */
+
+Module["ret"] = -1;
+Module["timeout"] = -1;
+Module["logger"] = () => {};
+Module["progress"] = () => {};
+
+/**
+ * Functions
+ */
+
+function stringToPtr(str) {
+  const len = Module["lengthBytesUTF8"](str) + 1;
+  const ptr = Module["_malloc"](len);
+  Module["stringToUTF8"](str, ptr, len);
+
+  return ptr;
+}
+
+function stringsToPtr(strs) {
+  const len = strs.length;
+  const ptr = Module["_malloc"](len * SIZE_I32);
+  for (let i = 0; i < len; i++) {
+    Module["setValue"](ptr + SIZE_I32 * i, stringToPtr(strs[i]), "i32");
+  }
+
+  return ptr;
+}
+
+function print(message) {
+  Module["logger"]({ type: "stdout", message });
+}
+
+function printErr(message) {
+  if (!message.startsWith("Aborted(native code called abort())"))
+    Module["logger"]({ type: "stderr", message });
+}
+
+function exec(..._args) {
+  const args = [..._args];
+  console.log("FFmpeg: exec", args);
+  try {
+    Module["_main"](args.length, stringsToPtr(args));
+  } catch (e) {
+    console.log('FFmpeg: Exec error:', e);
+    // if (!e.message.startsWith("Aborted")) {
+    //   throw e;
+    // }
+  }
+  return Module["ret"];
+}
+
+function setLogger(logger) {
+  Module["logger"] = logger;
+}
+
+function setTimeout(timeout) {
+  Module["timeout"] = timeout;
+}
+
+function setProgress(handler) {
+  Module["progress"] = handler;
+}
+
+function receiveProgress(progress, time) {
+  Module["progress"]({ progress, time });
+}
+
+function reset() {
+  Module["ret"] = -1;
+  Module["timeout"] = -1;
+}
+
+Module["stringToPtr"] = stringToPtr;
+Module["stringsToPtr"] = stringsToPtr;
+Module["print"] = print;
+Module["printErr"] = printErr;
+
+Module["exec"] = exec;
+Module["setLogger"] = setLogger;
+Module["setTimeout"] = setTimeout;
+Module["setProgress"] = setProgress;
+Module["reset"] = reset;
+Module["receiveProgress"] = receiveProgress;// end include: /Users/tini2n/Projects/playground/wasm/FFmpeg/pre.js
 
 
 // Sometimes an existing Module object exists with properties
@@ -275,7 +376,7 @@ legacyModuleProp('readBinary', 'readBinary');
 legacyModuleProp('setWindowTitle', 'setWindowTitle');
 var IDBFS = 'IDBFS is no longer included by default; build with -lidbfs.js';
 var PROXYFS = 'PROXYFS is no longer included by default; build with -lproxyfs.js';
-var WORKERFS = 'WORKERFS is no longer included by default; build with -lworkerfs.js';
+
 var FETCHFS = 'FETCHFS is no longer included by default; build with -lfetchfs.js';
 var ICASEFS = 'ICASEFS is no longer included by default; build with -licasefs.js';
 var JSFILEFS = 'JSFILEFS is no longer included by default; build with -ljsfilefs.js';
@@ -335,9 +436,6 @@ function assert(condition, text) {
 
 // We used to include malloc/free by default in the past. Show a helpful error in
 // builds with assertions.
-function _malloc() {
-  abort('malloc() called but not included in the build - add `_malloc` to EXPORTED_FUNCTIONS');
-}
 function _free() {
   // Show a helpful error since we used to include free by default in the past.
   abort('free() called but not included in the build - add `_free` to EXPORTED_FUNCTIONS');
@@ -407,10 +505,10 @@ function writeStackCookie() {
   // The stack grow downwards towards _emscripten_stack_get_end.
   // We write cookies to the final two words in the stack and detect if they are
   // ever overwritten.
-  HEAPU32[((max)>>2)] = 0x02135467;
-  HEAPU32[(((max)+(4))>>2)] = 0x89BACDFE;
+  HEAPU32[((max)>>2)] = 0x02135467;checkInt32(0x02135467);
+  HEAPU32[(((max)+(4))>>2)] = 0x89BACDFE;checkInt32(0x89BACDFE);
   // Also test the global address 0 for integrity.
-  HEAPU32[((0)>>2)] = 1668509029;
+  HEAPU32[((0)>>2)] = 1668509029;checkInt32(1668509029);
 }
 
 function checkStackCookie() {
@@ -464,6 +562,8 @@ function initRuntime() {
   runtimeInitialized = true;
 
   checkStackCookie();
+
+  setStackLimits();
 
   
 if (!Module['noFSInit'] && !FS.init.initialized)
@@ -671,7 +771,7 @@ function createExportWrapper(name, nargs) {
 // include: runtime_exceptions.js
 // end include: runtime_exceptions.js
 function findWasmBinary() {
-    var f = 'dist/ffmpeg.wasm';
+    var f = 'ffmpeg.wasm';
     if (!isDataURI(f)) {
       return locateFile(f);
     }
@@ -920,6 +1020,31 @@ function unexportedRuntimeSymbol(sym) {
   }
 }
 
+var MAX_UINT8  = (2 **  8) - 1;
+var MAX_UINT16 = (2 ** 16) - 1;
+var MAX_UINT32 = (2 ** 32) - 1;
+var MAX_UINT53 = (2 ** 53) - 1;
+var MAX_UINT64 = (2 ** 64) - 1;
+
+var MIN_INT8  = - (2 ** ( 8 - 1)) + 1;
+var MIN_INT16 = - (2 ** (16 - 1)) + 1;
+var MIN_INT32 = - (2 ** (32 - 1)) + 1;
+var MIN_INT53 = - (2 ** (53 - 1)) + 1;
+var MIN_INT64 = - (2 ** (64 - 1)) + 1;
+
+function checkInt(value, bits, min, max) {
+  assert(Number.isInteger(Number(value)), `attempt to write non-integer (${value}) into integer heap`);
+  assert(value <= max, `value (${value}) too large to write as ${bits}-bit value`);
+  assert(value >= min, `value (${value}) too small to write as ${bits}-bit value`);
+}
+
+var checkInt1 = (value) => checkInt(value, 1, 1);
+var checkInt8 = (value) => checkInt(value, 8, MIN_INT8, MAX_UINT8);
+var checkInt16 = (value) => checkInt(value, 16, MIN_INT16, MAX_UINT16);
+var checkInt32 = (value) => checkInt(value, 32, MIN_INT32, MAX_UINT32);
+var checkInt53 = (value) => checkInt(value, 53, MIN_INT53, MAX_UINT53);
+var checkInt64 = (value) => checkInt(value, 64, MIN_INT64, MAX_UINT64);
+
 // Used by XXXXX_DEBUG settings to output debug messages.
 function dbg(...args) {
   // TODO(sbc): Make this configurable somehow.  Its not always convenient for
@@ -974,6 +1099,12 @@ function dbg(...args) {
       return '0x' + ptr.toString(16).padStart(8, '0');
     };
 
+  var setStackLimits = () => {
+      var stackLow = _emscripten_stack_get_base();
+      var stackHigh = _emscripten_stack_get_end();
+      ___set_stack_limits(stackLow, stackHigh);
+    };
+
   
     /**
      * @param {number} ptr
@@ -983,11 +1114,11 @@ function dbg(...args) {
   function setValue(ptr, value, type = 'i8') {
     if (type.endsWith('*')) type = '*';
     switch (type) {
-      case 'i1': HEAP8[ptr] = value; break;
-      case 'i8': HEAP8[ptr] = value; break;
-      case 'i16': HEAP16[((ptr)>>1)] = value; break;
-      case 'i32': HEAP32[((ptr)>>2)] = value; break;
-      case 'i64': HEAP64[((ptr)>>3)] = BigInt(value); break;
+      case 'i1': HEAP8[ptr] = value;checkInt8(value); break;
+      case 'i8': HEAP8[ptr] = value;checkInt8(value); break;
+      case 'i16': HEAP16[((ptr)>>1)] = value;checkInt16(value); break;
+      case 'i32': HEAP32[((ptr)>>2)] = value;checkInt32(value); break;
+      case 'i64': HEAP64[((ptr)>>3)] = BigInt(value);checkInt64(value); break;
       case 'float': HEAPF32[((ptr)>>2)] = value; break;
       case 'double': HEAPF64[((ptr)>>3)] = value; break;
       case '*': HEAPU32[((ptr)>>2)] = value; break;
@@ -1083,6 +1214,16 @@ function dbg(...args) {
     };
   var ___assert_fail = (condition, filename, line, func) => {
       abort(`Assertion failed: ${UTF8ToString(condition)}, at: ` + [filename ? UTF8ToString(filename) : 'unknown filename', line, func ? UTF8ToString(func) : 'unknown function']);
+    };
+
+  
+  
+  var ___handle_stack_overflow = (requested) => {
+      var base = _emscripten_stack_get_base();
+      var end = _emscripten_stack_get_end();
+      abort(`stack overflow (Attempt to set SP to ${ptrToString(requested)}` +
+            `, with stack limits [${ptrToString(end)} - ${ptrToString(base)}` +
+            ']). If you require more stack space build with -sSTACK_SIZE=<bytes>');
     };
 
   var PATH = {
@@ -1950,6 +2091,151 @@ function dbg(...args) {
   
   
   
+  
+  var WORKERFS = {
+  DIR_MODE:16895,
+  FILE_MODE:33279,
+  reader:null,
+  mount(mount) {
+        assert(ENVIRONMENT_IS_WORKER);
+        if (!WORKERFS.reader) WORKERFS.reader = new FileReaderSync();
+        var root = WORKERFS.createNode(null, '/', WORKERFS.DIR_MODE, 0);
+        var createdParents = {};
+        function ensureParent(path) {
+          // return the parent node, creating subdirs as necessary
+          var parts = path.split('/');
+          var parent = root;
+          for (var i = 0; i < parts.length-1; i++) {
+            var curr = parts.slice(0, i+1).join('/');
+            // Issue 4254: Using curr as a node name will prevent the node
+            // from being found in FS.nameTable when FS.open is called on
+            // a path which holds a child of this node,
+            // given that all FS functions assume node names
+            // are just their corresponding parts within their given path,
+            // rather than incremental aggregates which include their parent's
+            // directories.
+            createdParents[curr] ||= WORKERFS.createNode(parent, parts[i], WORKERFS.DIR_MODE, 0);
+            parent = createdParents[curr];
+          }
+          return parent;
+        }
+        function base(path) {
+          var parts = path.split('/');
+          return parts[parts.length-1];
+        }
+        // We also accept FileList here, by using Array.prototype
+        Array.prototype.forEach.call(mount.opts["files"] || [], function(file) {
+          WORKERFS.createNode(ensureParent(file.name), base(file.name), WORKERFS.FILE_MODE, 0, file, file.lastModifiedDate);
+        });
+        (mount.opts["blobs"] || []).forEach(function(obj) {
+          WORKERFS.createNode(ensureParent(obj["name"]), base(obj["name"]), WORKERFS.FILE_MODE, 0, obj["data"]);
+        });
+        (mount.opts["packages"] || []).forEach(function(pack) {
+          pack['metadata'].files.forEach(function(file) {
+            var name = file.filename.substr(1); // remove initial slash
+            WORKERFS.createNode(ensureParent(name), base(name), WORKERFS.FILE_MODE, 0, pack['blob'].slice(file.start, file.end));
+          });
+        });
+        return root;
+      },
+  createNode(parent, name, mode, dev, contents, mtime) {
+        var node = FS.createNode(parent, name, mode);
+        node.mode = mode;
+        node.node_ops = WORKERFS.node_ops;
+        node.stream_ops = WORKERFS.stream_ops;
+        node.timestamp = (mtime || new Date).getTime();
+        assert(WORKERFS.FILE_MODE !== WORKERFS.DIR_MODE);
+        if (mode === WORKERFS.FILE_MODE) {
+          node.size = contents.size;
+          node.contents = contents;
+        } else {
+          node.size = 4096;
+          node.contents = {};
+        }
+        if (parent) {
+          parent.contents[name] = node;
+        }
+        return node;
+      },
+  node_ops:{
+  getattr(node) {
+          return {
+            dev: 1,
+            ino: node.id,
+            mode: node.mode,
+            nlink: 1,
+            uid: 0,
+            gid: 0,
+            rdev: 0,
+            size: node.size,
+            atime: new Date(node.timestamp),
+            mtime: new Date(node.timestamp),
+            ctime: new Date(node.timestamp),
+            blksize: 4096,
+            blocks: Math.ceil(node.size / 4096),
+          };
+        },
+  setattr(node, attr) {
+          if (attr.mode !== undefined) {
+            node.mode = attr.mode;
+          }
+          if (attr.timestamp !== undefined) {
+            node.timestamp = attr.timestamp;
+          }
+        },
+  lookup(parent, name) {
+          throw new FS.ErrnoError(44);
+        },
+  mknod(parent, name, mode, dev) {
+          throw new FS.ErrnoError(63);
+        },
+  rename(oldNode, newDir, newName) {
+          throw new FS.ErrnoError(63);
+        },
+  unlink(parent, name) {
+          throw new FS.ErrnoError(63);
+        },
+  rmdir(parent, name) {
+          throw new FS.ErrnoError(63);
+        },
+  readdir(node) {
+          var entries = ['.', '..'];
+          for (var key of Object.keys(node.contents)) {
+            entries.push(key);
+          }
+          return entries;
+        },
+  symlink(parent, newName, oldPath) {
+          throw new FS.ErrnoError(63);
+        },
+  },
+  stream_ops:{
+  read(stream, buffer, offset, length, position) {
+          if (position >= stream.node.size) return 0;
+          var chunk = stream.node.contents.slice(position, position + length);
+          var ab = WORKERFS.reader.readAsArrayBuffer(chunk);
+          buffer.set(new Uint8Array(ab), offset);
+          return chunk.size;
+        },
+  write(stream, buffer, offset, length, position) {
+          throw new FS.ErrnoError(29);
+        },
+  llseek(stream, offset, whence) {
+          var position = offset;
+          if (whence === 1) {
+            position += stream.position;
+          } else if (whence === 2) {
+            if (FS.isFile(stream.node.mode)) {
+              position += stream.node.size;
+            }
+          }
+          if (position < 0) {
+            throw new FS.ErrnoError(28);
+          }
+          return position;
+        },
+  },
+  };
   
   
   
@@ -3326,6 +3612,7 @@ function dbg(...args) {
   
         FS.filesystems = {
           'MEMFS': MEMFS,
+          'WORKERFS': WORKERFS,
         };
       },
   init(input, output, error) {
@@ -3705,25 +3992,25 @@ function dbg(...args) {
       },
   doStat(func, path, buf) {
         var stat = func(path);
-        HEAP32[((buf)>>2)] = stat.dev;
-        HEAP32[(((buf)+(4))>>2)] = stat.mode;
-        HEAPU32[(((buf)+(8))>>2)] = stat.nlink;
-        HEAP32[(((buf)+(12))>>2)] = stat.uid;
-        HEAP32[(((buf)+(16))>>2)] = stat.gid;
-        HEAP32[(((buf)+(20))>>2)] = stat.rdev;
-        HEAP64[(((buf)+(24))>>3)] = BigInt(stat.size);
-        HEAP32[(((buf)+(32))>>2)] = 4096;
-        HEAP32[(((buf)+(36))>>2)] = stat.blocks;
+        HEAP32[((buf)>>2)] = stat.dev;checkInt32(stat.dev);
+        HEAP32[(((buf)+(4))>>2)] = stat.mode;checkInt32(stat.mode);
+        HEAPU32[(((buf)+(8))>>2)] = stat.nlink;checkInt32(stat.nlink);
+        HEAP32[(((buf)+(12))>>2)] = stat.uid;checkInt32(stat.uid);
+        HEAP32[(((buf)+(16))>>2)] = stat.gid;checkInt32(stat.gid);
+        HEAP32[(((buf)+(20))>>2)] = stat.rdev;checkInt32(stat.rdev);
+        HEAP64[(((buf)+(24))>>3)] = BigInt(stat.size);checkInt64(stat.size);
+        HEAP32[(((buf)+(32))>>2)] = 4096;checkInt32(4096);
+        HEAP32[(((buf)+(36))>>2)] = stat.blocks;checkInt32(stat.blocks);
         var atime = stat.atime.getTime();
         var mtime = stat.mtime.getTime();
         var ctime = stat.ctime.getTime();
-        HEAP64[(((buf)+(40))>>3)] = BigInt(Math.floor(atime / 1000));
-        HEAPU32[(((buf)+(48))>>2)] = (atime % 1000) * 1000;
-        HEAP64[(((buf)+(56))>>3)] = BigInt(Math.floor(mtime / 1000));
-        HEAPU32[(((buf)+(64))>>2)] = (mtime % 1000) * 1000;
-        HEAP64[(((buf)+(72))>>3)] = BigInt(Math.floor(ctime / 1000));
-        HEAPU32[(((buf)+(80))>>2)] = (ctime % 1000) * 1000;
-        HEAP64[(((buf)+(88))>>3)] = BigInt(stat.ino);
+        HEAP64[(((buf)+(40))>>3)] = BigInt(Math.floor(atime / 1000));checkInt64(Math.floor(atime / 1000));
+        HEAPU32[(((buf)+(48))>>2)] = (atime % 1000) * 1000;checkInt32((atime % 1000) * 1000);
+        HEAP64[(((buf)+(56))>>3)] = BigInt(Math.floor(mtime / 1000));checkInt64(Math.floor(mtime / 1000));
+        HEAPU32[(((buf)+(64))>>2)] = (mtime % 1000) * 1000;checkInt32((mtime % 1000) * 1000);
+        HEAP64[(((buf)+(72))>>3)] = BigInt(Math.floor(ctime / 1000));checkInt64(Math.floor(ctime / 1000));
+        HEAPU32[(((buf)+(80))>>2)] = (ctime % 1000) * 1000;checkInt32((ctime % 1000) * 1000);
+        HEAP64[(((buf)+(88))>>3)] = BigInt(stat.ino);checkInt64(stat.ino);
         return 0;
       },
   doMsync(addr, stream, len, flags, offset) {
@@ -3824,16 +4111,16 @@ function dbg(...args) {
       }
   
       if (readfds) {
-        HEAP32[((readfds)>>2)] = dstReadLow;
-        HEAP32[(((readfds)+(4))>>2)] = dstReadHigh;
+        HEAP32[((readfds)>>2)] = dstReadLow;checkInt32(dstReadLow);
+        HEAP32[(((readfds)+(4))>>2)] = dstReadHigh;checkInt32(dstReadHigh);
       }
       if (writefds) {
-        HEAP32[((writefds)>>2)] = dstWriteLow;
-        HEAP32[(((writefds)+(4))>>2)] = dstWriteHigh;
+        HEAP32[((writefds)>>2)] = dstWriteLow;checkInt32(dstWriteLow);
+        HEAP32[(((writefds)+(4))>>2)] = dstWriteHigh;checkInt32(dstWriteHigh);
       }
       if (exceptfds) {
-        HEAP32[((exceptfds)>>2)] = dstExceptLow;
-        HEAP32[(((exceptfds)+(4))>>2)] = dstExceptHigh;
+        HEAP32[((exceptfds)>>2)] = dstExceptLow;checkInt32(dstExceptLow);
+        HEAP32[(((exceptfds)+(4))>>2)] = dstExceptHigh;checkInt32(dstExceptHigh);
       }
   
       return total;
@@ -3915,7 +4202,7 @@ function dbg(...args) {
           var arg = syscallGetVarargP();
           var offset = 0;
           // We're always unlocked.
-          HEAP16[(((arg)+(offset))>>1)] = 2;
+          HEAP16[(((arg)+(offset))>>1)] = 2;checkInt16(2);
           return 0;
         }
         case 13:
@@ -3979,10 +4266,10 @@ function dbg(...args) {
                  8;                             // DT_REG, regular file.
         }
         assert(id);
-        HEAP64[((dirp + pos)>>3)] = BigInt(id);
-        HEAP64[(((dirp + pos)+(8))>>3)] = BigInt((idx + 1) * struct_size);
-        HEAP16[(((dirp + pos)+(16))>>1)] = 280;
-        HEAP8[(dirp + pos)+(18)] = type;
+        HEAP64[((dirp + pos)>>3)] = BigInt(id);checkInt64(id);
+        HEAP64[(((dirp + pos)+(8))>>3)] = BigInt((idx + 1) * struct_size);checkInt64((idx + 1) * struct_size);
+        HEAP16[(((dirp + pos)+(16))>>1)] = 280;checkInt16(280);
+        HEAP8[(dirp + pos)+(18)] = type;checkInt8(type);
         stringToUTF8(name, dirp + pos + 19, 256);
         pos += struct_size;
         idx += 1;
@@ -4011,12 +4298,12 @@ function dbg(...args) {
           if (stream.tty.ops.ioctl_tcgets) {
             var termios = stream.tty.ops.ioctl_tcgets(stream);
             var argp = syscallGetVarargP();
-            HEAP32[((argp)>>2)] = termios.c_iflag || 0;
-            HEAP32[(((argp)+(4))>>2)] = termios.c_oflag || 0;
-            HEAP32[(((argp)+(8))>>2)] = termios.c_cflag || 0;
-            HEAP32[(((argp)+(12))>>2)] = termios.c_lflag || 0;
+            HEAP32[((argp)>>2)] = termios.c_iflag || 0;checkInt32(termios.c_iflag || 0);
+            HEAP32[(((argp)+(4))>>2)] = termios.c_oflag || 0;checkInt32(termios.c_oflag || 0);
+            HEAP32[(((argp)+(8))>>2)] = termios.c_cflag || 0;checkInt32(termios.c_cflag || 0);
+            HEAP32[(((argp)+(12))>>2)] = termios.c_lflag || 0;checkInt32(termios.c_lflag || 0);
             for (var i = 0; i < 32; i++) {
-              HEAP8[(argp + i)+(17)] = termios.c_cc[i] || 0;
+              HEAP8[(argp + i)+(17)] = termios.c_cc[i] || 0;checkInt8(termios.c_cc[i] || 0);
             }
             return 0;
           }
@@ -4049,7 +4336,7 @@ function dbg(...args) {
         case 21519: {
           if (!stream.tty) return -59;
           var argp = syscallGetVarargP();
-          HEAP32[((argp)>>2)] = 0;
+          HEAP32[((argp)>>2)] = 0;checkInt32(0);
           return 0;
         }
         case 21520: {
@@ -4067,8 +4354,8 @@ function dbg(...args) {
           if (stream.tty.ops.ioctl_tiocgwinsz) {
             var winsize = stream.tty.ops.ioctl_tiocgwinsz(stream.tty);
             var argp = syscallGetVarargP();
-            HEAP16[((argp)>>1)] = winsize[0];
-            HEAP16[(((argp)+(2))>>1)] = winsize[1];
+            HEAP16[((argp)>>1)] = winsize[0];checkInt16(winsize[0]);
+            HEAP16[(((argp)+(2))>>1)] = winsize[1];checkInt16(winsize[1]);
           }
           return 0;
         }
@@ -4206,16 +4493,16 @@ function dbg(...args) {
   
     
       var date = new Date(time * 1000);
-      HEAP32[((tmPtr)>>2)] = date.getUTCSeconds();
-      HEAP32[(((tmPtr)+(4))>>2)] = date.getUTCMinutes();
-      HEAP32[(((tmPtr)+(8))>>2)] = date.getUTCHours();
-      HEAP32[(((tmPtr)+(12))>>2)] = date.getUTCDate();
-      HEAP32[(((tmPtr)+(16))>>2)] = date.getUTCMonth();
-      HEAP32[(((tmPtr)+(20))>>2)] = date.getUTCFullYear()-1900;
-      HEAP32[(((tmPtr)+(24))>>2)] = date.getUTCDay();
+      HEAP32[((tmPtr)>>2)] = date.getUTCSeconds();checkInt32(date.getUTCSeconds());
+      HEAP32[(((tmPtr)+(4))>>2)] = date.getUTCMinutes();checkInt32(date.getUTCMinutes());
+      HEAP32[(((tmPtr)+(8))>>2)] = date.getUTCHours();checkInt32(date.getUTCHours());
+      HEAP32[(((tmPtr)+(12))>>2)] = date.getUTCDate();checkInt32(date.getUTCDate());
+      HEAP32[(((tmPtr)+(16))>>2)] = date.getUTCMonth();checkInt32(date.getUTCMonth());
+      HEAP32[(((tmPtr)+(20))>>2)] = date.getUTCFullYear()-1900;checkInt32(date.getUTCFullYear()-1900);
+      HEAP32[(((tmPtr)+(24))>>2)] = date.getUTCDay();checkInt32(date.getUTCDay());
       var start = Date.UTC(date.getUTCFullYear(), 0, 1, 0, 0, 0, 0);
       var yday = ((date.getTime() - start) / (1000 * 60 * 60 * 24))|0;
-      HEAP32[(((tmPtr)+(28))>>2)] = yday;
+      HEAP32[(((tmPtr)+(28))>>2)] = yday;checkInt32(yday);
     ;
   }
 
@@ -4237,24 +4524,24 @@ function dbg(...args) {
   
     
       var date = new Date(time*1000);
-      HEAP32[((tmPtr)>>2)] = date.getSeconds();
-      HEAP32[(((tmPtr)+(4))>>2)] = date.getMinutes();
-      HEAP32[(((tmPtr)+(8))>>2)] = date.getHours();
-      HEAP32[(((tmPtr)+(12))>>2)] = date.getDate();
-      HEAP32[(((tmPtr)+(16))>>2)] = date.getMonth();
-      HEAP32[(((tmPtr)+(20))>>2)] = date.getFullYear()-1900;
-      HEAP32[(((tmPtr)+(24))>>2)] = date.getDay();
+      HEAP32[((tmPtr)>>2)] = date.getSeconds();checkInt32(date.getSeconds());
+      HEAP32[(((tmPtr)+(4))>>2)] = date.getMinutes();checkInt32(date.getMinutes());
+      HEAP32[(((tmPtr)+(8))>>2)] = date.getHours();checkInt32(date.getHours());
+      HEAP32[(((tmPtr)+(12))>>2)] = date.getDate();checkInt32(date.getDate());
+      HEAP32[(((tmPtr)+(16))>>2)] = date.getMonth();checkInt32(date.getMonth());
+      HEAP32[(((tmPtr)+(20))>>2)] = date.getFullYear()-1900;checkInt32(date.getFullYear()-1900);
+      HEAP32[(((tmPtr)+(24))>>2)] = date.getDay();checkInt32(date.getDay());
   
       var yday = ydayFromDate(date)|0;
-      HEAP32[(((tmPtr)+(28))>>2)] = yday;
-      HEAP32[(((tmPtr)+(36))>>2)] = -(date.getTimezoneOffset() * 60);
+      HEAP32[(((tmPtr)+(28))>>2)] = yday;checkInt32(yday);
+      HEAP32[(((tmPtr)+(36))>>2)] = -(date.getTimezoneOffset() * 60);checkInt32(-(date.getTimezoneOffset() * 60));
   
       // Attention: DST is in December in South, and some regions don't have DST at all.
       var start = new Date(date.getFullYear(), 0, 1);
       var summerOffset = new Date(date.getFullYear(), 6, 1).getTimezoneOffset();
       var winterOffset = start.getTimezoneOffset();
       var dst = (summerOffset != winterOffset && date.getTimezoneOffset() == Math.min(winterOffset, summerOffset))|0;
-      HEAP32[(((tmPtr)+(32))>>2)] = dst;
+      HEAP32[(((tmPtr)+(32))>>2)] = dst;checkInt32(dst);
     ;
   }
 
@@ -4281,7 +4568,7 @@ function dbg(...args) {
       var dstOffset = Math.min(winterOffset, summerOffset); // DST is in December in South
       if (dst < 0) {
         // Attention: some regions don't have DST at all.
-        HEAP32[(((tmPtr)+(32))>>2)] = Number(summerOffset != winterOffset && dstOffset == guessedOffset);
+        HEAP32[(((tmPtr)+(32))>>2)] = Number(summerOffset != winterOffset && dstOffset == guessedOffset);checkInt32(Number(summerOffset != winterOffset && dstOffset == guessedOffset));
       } else if ((dst > 0) != (dstOffset == guessedOffset)) {
         var nonDstOffset = Math.max(winterOffset, summerOffset);
         var trueOffset = dst > 0 ? dstOffset : nonDstOffset;
@@ -4289,16 +4576,16 @@ function dbg(...args) {
         date.setTime(date.getTime() + (trueOffset - guessedOffset)*60000);
       }
   
-      HEAP32[(((tmPtr)+(24))>>2)] = date.getDay();
+      HEAP32[(((tmPtr)+(24))>>2)] = date.getDay();checkInt32(date.getDay());
       var yday = ydayFromDate(date)|0;
-      HEAP32[(((tmPtr)+(28))>>2)] = yday;
+      HEAP32[(((tmPtr)+(28))>>2)] = yday;checkInt32(yday);
       // To match expected behavior, update fields from date
-      HEAP32[((tmPtr)>>2)] = date.getSeconds();
-      HEAP32[(((tmPtr)+(4))>>2)] = date.getMinutes();
-      HEAP32[(((tmPtr)+(8))>>2)] = date.getHours();
-      HEAP32[(((tmPtr)+(12))>>2)] = date.getDate();
-      HEAP32[(((tmPtr)+(16))>>2)] = date.getMonth();
-      HEAP32[(((tmPtr)+(20))>>2)] = date.getYear();
+      HEAP32[((tmPtr)>>2)] = date.getSeconds();checkInt32(date.getSeconds());
+      HEAP32[(((tmPtr)+(4))>>2)] = date.getMinutes();checkInt32(date.getMinutes());
+      HEAP32[(((tmPtr)+(8))>>2)] = date.getHours();checkInt32(date.getHours());
+      HEAP32[(((tmPtr)+(12))>>2)] = date.getDate();checkInt32(date.getDate());
+      HEAP32[(((tmPtr)+(16))>>2)] = date.getMonth();checkInt32(date.getMonth());
+      HEAP32[(((tmPtr)+(20))>>2)] = date.getYear();checkInt32(date.getYear());
   
       var timeMs = date.getTime();
       if (isNaN(timeMs)) {
@@ -4332,9 +4619,9 @@ function dbg(...args) {
       // Coordinated Universal Time (UTC) and local standard time."), the same
       // as returned by stdTimezoneOffset.
       // See http://pubs.opengroup.org/onlinepubs/009695399/functions/tzset.html
-      HEAPU32[((timezone)>>2)] = stdTimezoneOffset * 60;
+      HEAPU32[((timezone)>>2)] = stdTimezoneOffset * 60;checkInt32(stdTimezoneOffset * 60);
   
-      HEAP32[((daylight)>>2)] = Number(winterOffset != summerOffset);
+      HEAP32[((daylight)>>2)] = Number(winterOffset != summerOffset);checkInt32(Number(winterOffset != summerOffset));
   
       var extractZone = (timezoneOffset) => {
         // Why inverse sign?
@@ -4381,6 +4668,7 @@ function dbg(...args) {
       // for any code that deals with heap sizes, which would require special
       // casing all heap size related code to treat 0 specially.
       2147483648;
+  
   
   var growMemory = (size) => {
       var b = wasmMemory.buffer;
@@ -4441,7 +4729,10 @@ function dbg(...args) {
   
         var newSize = Math.min(maxHeapSize, alignUp(Math.max(requestedSize, overGrownHeapSize), 65536));
   
+        var t0 = _emscripten_get_now();
         var replacement = growMemory(newSize);
+        var t1 = _emscripten_get_now();
+        dbg(`Heap resize call from ${oldSize} to ${newSize} took ${(t1 - t0)} msecs. Success: ${!!replacement}`);
         if (replacement) {
   
           return true;
@@ -4491,16 +4782,16 @@ function dbg(...args) {
   var stringToAscii = (str, buffer) => {
       for (var i = 0; i < str.length; ++i) {
         assert(str.charCodeAt(i) === (str.charCodeAt(i) & 0xff));
-        HEAP8[buffer++] = str.charCodeAt(i);
+        HEAP8[buffer++] = str.charCodeAt(i);checkInt8(str.charCodeAt(i));
       }
       // Null-terminate the string
-      HEAP8[buffer] = 0;
+      HEAP8[buffer] = 0;checkInt8(0);
     };
   var _environ_get = (__environ, environ_buf) => {
       var bufSize = 0;
       getEnvStrings().forEach((string, i) => {
         var ptr = environ_buf + bufSize;
-        HEAPU32[(((__environ)+(i*4))>>2)] = ptr;
+        HEAPU32[(((__environ)+(i*4))>>2)] = ptr;checkInt32(ptr);
         stringToAscii(string, ptr);
         bufSize += string.length + 1;
       });
@@ -4509,10 +4800,10 @@ function dbg(...args) {
 
   var _environ_sizes_get = (penviron_count, penviron_buf_size) => {
       var strings = getEnvStrings();
-      HEAPU32[((penviron_count)>>2)] = strings.length;
+      HEAPU32[((penviron_count)>>2)] = strings.length;checkInt32(strings.length);
       var bufSize = 0;
       strings.forEach((string) => bufSize += string.length + 1);
-      HEAPU32[((penviron_buf_size)>>2)] = bufSize;
+      HEAPU32[((penviron_buf_size)>>2)] = bufSize;checkInt32(bufSize);
       return 0;
     };
 
@@ -4574,10 +4865,10 @@ function dbg(...args) {
                    FS.isLink(stream.mode) ? 7 :
                    4;
       }
-      HEAP8[pbuf] = type;
-      HEAP16[(((pbuf)+(2))>>1)] = flags;
-      HEAP64[(((pbuf)+(8))>>3)] = BigInt(rightsBase);
-      HEAP64[(((pbuf)+(16))>>3)] = BigInt(rightsInheriting);
+      HEAP8[pbuf] = type;checkInt8(type);
+      HEAP16[(((pbuf)+(2))>>1)] = flags;checkInt16(flags);
+      HEAP64[(((pbuf)+(8))>>3)] = BigInt(rightsBase);checkInt64(rightsBase);
+      HEAP64[(((pbuf)+(16))>>3)] = BigInt(rightsInheriting);checkInt64(rightsInheriting);
       return 0;
     } catch (e) {
     if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
@@ -4608,7 +4899,7 @@ function dbg(...args) {
   
       var stream = SYSCALLS.getStreamFromFD(fd);
       var num = doReadv(stream, iov, iovcnt);
-      HEAPU32[((pnum)>>2)] = num;
+      HEAPU32[((pnum)>>2)] = num;checkInt32(num);
       return 0;
     } catch (e) {
     if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
@@ -4626,7 +4917,7 @@ function dbg(...args) {
       if (isNaN(offset)) return 61;
       var stream = SYSCALLS.getStreamFromFD(fd);
       FS.llseek(stream, offset, whence);
-      HEAP64[((newOffset)>>3)] = BigInt(stream.position);
+      HEAP64[((newOffset)>>3)] = BigInt(stream.position);checkInt64(stream.position);
       if (stream.getdents && offset === 0 && whence === 0) stream.getdents = null; // reset readdir state
       return 0;
     } catch (e) {
@@ -4662,7 +4953,7 @@ function dbg(...args) {
   
       var stream = SYSCALLS.getStreamFromFD(fd);
       var num = doWritev(stream, iov, iovcnt);
-      HEAPU32[((pnum)>>2)] = num;
+      HEAPU32[((pnum)>>2)] = num;checkInt32(num);
       return 0;
     } catch (e) {
     if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
@@ -4683,7 +4974,7 @@ function dbg(...args) {
       checkStackCookie();
       if (e instanceof WebAssembly.RuntimeError) {
         if (_emscripten_stack_get_current() <= 0) {
-          err('Stack overflow detected.  You can try increasing -sSTACK_SIZE (currently set to 65536)');
+          err('Stack overflow detected.  You can try increasing -sSTACK_SIZE (currently set to 10485760)');
         }
       }
       quit_(1, e);
@@ -4702,6 +4993,9 @@ function dbg(...args) {
 
 
 
+
+
+
   var _emscripten_exit_with_live_runtime = () => {
       
       throw 'unwind';
@@ -4716,6 +5010,8 @@ function checkIncomingModuleAPI() {
 var wasmImports = {
   /** @export */
   __assert_fail: ___assert_fail,
+  /** @export */
+  __handle_stack_overflow: ___handle_stack_overflow,
   /** @export */
   __syscall__newselect: ___syscall__newselect,
   /** @export */
@@ -4785,6 +5081,7 @@ var _fflush = createExportWrapper('fflush', 1);
 var _abort = Module['_abort'] = createExportWrapper('abort', 0);
 var _strerror = createExportWrapper('strerror', 1);
 var _main = Module['_main'] = createExportWrapper('__main_argc_argv', 2);
+var _malloc = Module['_malloc'] = createExportWrapper('malloc', 1);
 var _emscripten_stack_init = () => (_emscripten_stack_init = wasmExports['emscripten_stack_init'])();
 var _emscripten_stack_get_free = () => (_emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'])();
 var _emscripten_stack_get_base = () => (_emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'])();
@@ -4792,13 +5089,17 @@ var _emscripten_stack_get_end = () => (_emscripten_stack_get_end = wasmExports['
 var __emscripten_stack_restore = (a0) => (__emscripten_stack_restore = wasmExports['_emscripten_stack_restore'])(a0);
 var __emscripten_stack_alloc = (a0) => (__emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'])(a0);
 var _emscripten_stack_get_current = () => (_emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'])();
-var _ff_h264_cabac_tables = Module['_ff_h264_cabac_tables'] = 358972;
+var ___set_stack_limits = Module['___set_stack_limits'] = createExportWrapper('__set_stack_limits', 2);
+var _ff_h264_cabac_tables = Module['_ff_h264_cabac_tables'] = 10779196;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===
 
 Module['callMain'] = callMain;
 Module['exitJS'] = exitJS;
+Module['setValue'] = setValue;
+Module['stringToUTF8'] = stringToUTF8;
+Module['lengthBytesUTF8'] = lengthBytesUTF8;
 Module['FS'] = FS;
 var missingLibrarySymbols = [
   'writeI53ToI64',
@@ -4988,6 +5289,7 @@ var unexportedSymbols = [
   'getHeapMax',
   'growMemory',
   'ENV',
+  'setStackLimits',
   'MONTH_DAYS_REGULAR',
   'MONTH_DAYS_LEAP',
   'MONTH_DAYS_REGULAR_CUMULATIVE',
@@ -5015,7 +5317,6 @@ var unexportedSymbols = [
   'noExitRuntime',
   'freeTableIndexes',
   'functionsInTableMap',
-  'setValue',
   'getValue',
   'PATH',
   'PATH_FS',
@@ -5023,8 +5324,6 @@ var unexportedSymbols = [
   'UTF8ArrayToString',
   'UTF8ToString',
   'stringToUTF8Array',
-  'stringToUTF8',
-  'lengthBytesUTF8',
   'intArrayFromString',
   'stringToAscii',
   'UTF16Decoder',
@@ -5075,6 +5374,7 @@ var unexportedSymbols = [
   'allocateUTF8OnStack',
   'print',
   'printErr',
+  'WORKERFS',
 ];
 unexportedSymbols.forEach(unexportedRuntimeSymbol);
 

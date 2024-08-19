@@ -7,6 +7,7 @@ module.exports = {
         filename: '[name].js',
         chunkFilename: '[name].js',
         path: path.resolve(__dirname, 'dist'),
+        publicPath: '/dist/',
         library: 'FFmpegWeb',
         libraryTarget: 'umd',
         clean: true,
@@ -19,10 +20,6 @@ module.exports = {
                 exclude: /node_modules/,
             },
             {
-                test: /\.wasm$/,
-                type: 'asset/resource',
-            },
-            {
                 test: /\.worker\.ts$/,
                 use: {
                     loader: 'worker-loader',
@@ -30,6 +27,10 @@ module.exports = {
                         filename: '[name].[hash].js',
                     },
                 },
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
             },
         ],
     },
@@ -39,9 +40,6 @@ module.exports = {
             crypto: false,
             path: false,
             fs: false,
-            os: false,
-            worker_threads: false,
-            perf_hooks: false,
         },
     },
     plugins: [

@@ -1,13 +1,29 @@
 // @ts-nocheck
-console.log('Worker started');
+import { WORKER_MESSAGE_TYPES } from './constants';
 
-let ffmpeg: any; // This will hold the FFmpeg module
+console.log('Worker imported');
 
-// Function to load the FFmpeg module
-const load = async (coreURL: string = './wasm/ffmpeg.js'): Promise<void> => {
-    console.log('Loading FFmpeg:', coreURL);
+let ffmpeg: any;
+
+const load = async (coreURL: string = './wasm/ffmpeg.js'): Promise<boolean> => {
     try {
         (self).createFFmpegCore = ((await import(/* webpackChunkName: "ffmpeg-core" */ './wasm/ffmpeg.js'))).default;
+
+        // todo: move locate wasm file from pre.js
+        ffmpeg = await (self as any).createFFmpegCore();
+        console.log('WORKER: FFmpeg loaded:', { ffmpeg });
+
+        ffmpeg.setLogger((data) =>
+            self.postMessage({ type: WORKER_MESSAGE_TYPES.LOG, data })
+        );
+        ffmpeg.setProgress((data) =>
+            self.postMessage({
+                type: WORKER_MESSAGE_TYPES.PROGRESS,
+                data,
+            })
+        );
+
+        return true;
 
         // ffmpeg = await (self as any).createFFmpegCore({
         //     mainScriptUrlOrBlob: './wasm/ffmpeg.js',
@@ -19,90 +35,115 @@ const load = async (coreURL: string = './wasm/ffmpeg.js'): Promise<void> => {
         //         return file;
         //     }
         // });
-        ffmpeg = await (self as any).createFFmpegCore();
-        console.log('FFmpeg loaded:', { ffmpeg });
-
-        return ffmpeg;
     } catch (error) {
-        console.error('Failed to load FFmpeg:', error);
-        throw new Error('Failed to load FFmpeg');
+        console.error('WORKER ERROR: Failed to load FFmpeg:', error);
+
+        return false;
     }
 };
 
-// Function to execute an FFmpeg command
-const execCommand = async (args: string[]): Promise<number> => {
-    console.log('Executing FFmpeg command:', { args, ffmpeg });
+const execCommand = async (args: string[], timeout = -1): Promise<number> => {
     if (!ffmpeg) {
-        throw new Error('FFmpeg is not loaded');
+        throw new Error('WORKER ERROR: FFmpeg is not loaded');
     }
-    return ffmpeg.callMain(args);
+    const ret = ffmpeg.callMain(args);
+    ffmpeg.reset();
+    return ret;
+
+    // ffmpeg.setTimeout(timeout);
+    // ffmpeg.exec(...args);
+    // const ret = ffmpeg.ret;
+    // ffmpeg.reset();
+    // return ret;
 };
 
 const createDir = async (path: string): Promise<void> => {
-    ffmpeg.FS.mkdir(path);
+    try {
+        ffmpeg.FS.mkdir(path);
+        return true;
+    } catch (error) {
+        return false;
+    }
 };
 
-const writeFile = async (path: string, data: Uint8Array): Promise<void> => {
-    ffmpeg.FS.writeFile(path, data);
+const writeFile = async (path: string, data: Uint8Array): Promise<boolean> => {
+    try {
+        ffmpeg.FS.writeFile(path, data);
+        return true;
+    } catch (error) {
+        return false;
+    }
 };
 
 const readFile = async (path: string): Promise<Uint8Array> => {
-    return ffmpeg.FS.readFile(path);
+    const res = await ffmpeg.FS.readFile(path);
+    return res;
 };
+
+const deleteFile = async (path: string): Promise<boolean> => {
+    try {
+        ffmpeg.FS.unlink(path);
+        return true;
+    } catch (error) {
+        console.error('WORKER ERROR: Failed to delete file:', error);
+        return false;
+    }
+}
 
 const listDir = async (path: string): Promise<string[]> => {
     return ffmpeg.FS.readdir(path);
 };
 
-const fileExists = async (path: string): Promise<boolean> => {
-    try {
-        ffmpeg.FS.lookupPath(path);
-        return true;
-    } catch {
-        return false;
-    }
-};
+const fileExists = async (path: string): Promise<boolean> => await !!ffmpeg.FS.lookupPath(path);
 
-// Handle messages from the main thread
 self.onmessage = async (event: MessageEvent) => {
+    const trans = [];
+    let result;
     const { id, type, data } = event.data;
-    console.log('Worker received message:', { id, type, data });
+    console.log('WORKER on message:', { id, type, data });
 
     try {
-        let result;
         switch (type) {
-            case 'LOAD':
+            case WORKER_MESSAGE_TYPES.LOAD:
                 result = await load(data);
                 break;
-            case 'CREATE_DIR':
+            case WORKER_MESSAGE_TYPES.CREATE_DIR:
                 result = await createDir(data);
                 break;
-            case 'WRITE_FILE':
+            case WORKER_MESSAGE_TYPES.WRITE_FILE:
                 result = await writeFile(data.path, data.data);
                 break;
-            case 'READ_FILE':
+            case WORKER_MESSAGE_TYPES.READ_FILE:
                 result = await readFile(data);
                 break;
-            case 'LIST_DIR':
+            case WORKER_MESSAGE_TYPES.DELETE_FILE:
+                result = await deleteFile(data);
+                break;
+            case WORKER_MESSAGE_TYPES.LIST_DIR:
                 result = await listDir(data);
                 break;
-            case 'FILE_EXISTS':
+            case WORKER_MESSAGE_TYPES.FILE_EXISTS:
                 result = await fileExists(data);
                 break;
-            case 'EXEC':
+            case WORKER_MESSAGE_TYPES.EXEC:
                 result = await execCommand(data);
                 break;
             default:
-                throw new Error('Unknown command');
+                throw new Error(`WORKER ERROR: Unknown command type: ${type}`);
         }
-        self.postMessage({ id, type, result });
     } catch (error) {
-        self.postMessage({ id, type: 'error', error: error.message });
+        console.error('WORKER ERROR:', error);
+        self.postMessage({ id, type: WORKER_MESSAGE_TYPES.ERROR, data: error.message });
     }
+
+    if (result instanceof Uint8Array) {
+        trans.push(result.buffer);
+    }
+
+    self.postMessage({ id, type, data: result }, trans);
 };
 
 // console.log('worker.ts');
-
 // import { ERRORS, FF_MESSAGE_TYPES } from "./constants";
 // import { fetchFile, importScript } from './utils'
 // import type {

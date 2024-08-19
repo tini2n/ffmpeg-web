@@ -11,7 +11,7 @@ export PKG_CONFIG_PATH=$EMSDK/deps/ogg/lib/pkgconfig:$EMSDK/deps/vorbis/lib/pkgc
 # Clean previous builds
 emmake make clean
 
-CFLAGS="-s USE_PTHREADS" # Add "-O3" for optimisation
+CFLAGS="-DTHREADS_DISABLED" # Add "-O3" for optimisation
 LDFLAGS="$CFLAGS -s INITIAL_MEMORY=67108864 -s MAXIMUM_MEMORY=134217728 -s ALLOW_MEMORY_GROWTH" # 33554432 bytes = 32 MB
 
 # configure FFMpeg with Emscripten
@@ -22,13 +22,7 @@ CONFIG_ARGS=(
   --enable-static              # build static library
   --disable-x86asm             # disable x86 asm
   --disable-inline-asm         # Disable inline asm
-  --disable-stripping          # Disable stripping
-  --disable-programs           # Disable programs
-  --disable-doc                # Disable documentation components
-
-  --disable-safe-bitstream-reader       # Disable safe bitstream reader
-  --disable-fast-unaligned              # Disable fast unaligned
-  --disable-postproc                    # Disable post processing
+  
 
   --nm="$EMSDK/upstream/bin/llvm-nm -g"
   --ar="$EMSDK/upstream/bin/llvm-ar"
@@ -44,27 +38,37 @@ CONFIG_ARGS=(
   --extra-cxxflags="$CFLAGS"
   --extra-ldflags="$LDFLAGS -L$HOME/emsdk/deps/ogg/lib -L$HOME/emsdk/deps/vorbis/lib -L$HOME/emsdk/deps/x264/lib"
 
-  --disable-all                # Disable all components
-  --enable-avcodec             # Enable core codec library
-  --enable-avdevice            # Enable device support
-  --enable-postproc            # Enable postprocessing support
-  --enable-avformat            # Enable core format library
-  --enable-avfilter            # Enable filtering support
-  --enable-swscale             # Enable software scaling
-  --enable-swresample          # Enable software resampling
+  --disable-all                                   # Disable all components
 
-  --enable-libx264
-  --enable-protocol=file
-  --enable-parser=opus,vp9
+  --disable-stripping                             # Disable stripping (for debugging)
+  --disable-programs                              # Disable programs (ffmpeg, ffplay, ffprobe)
+  --disable-doc                                   # Disable documentation components
 
-  --enable-decoder=vp9,h264,opus,aac,pcm_s16le,mjpeg,png
-  --enable-demuxer=matroska,ogg,mov,wav,image2,concat
-  # --enable-filter=aresample,scale,crop,overlay,hstack,vstack
-  --enable-filters
+  --disable-pthreads                              # Disable pthreads (SharedArrayBuffer issue)
+  --disable-w32threads
+  --disable-os2threads
+
+  --disable-network                               # Disable networking if not needed
+  --disable-hwaccels                              # Disable hardware accelerations
+  --disable-avdevice                              # Disable libavdevice
+  --disable-postproc                              # Disable libpostproc
+  
+  --enable-avcodec                                # Enable core codec library (needed for libx264)
+  --enable-avformat                               # Enable core format library (needed for reading and writing containers)
+  --enable-avfilter                               # Enable filtering support (required for video scaling and format conversion)
+  --enable-swscale                                # Enable software scaling (for resizing and pixel format conversions)
+
+  --enable-libx264                                # Enable x264 library (H.264 video encoder)
+  --enable-protocol=file                          # Enable file protocol (needed for input/output)
+  --enable-parser=opus,vp9,vp8,vorbis             # Enable Opus and VP9 parsers (for webm)
+
+  --enable-decoder=vp9,vp8,h264,opus,vorbis,aac,pcm_s16le
+  --enable-demuxer=matroska,mov
+  --enable-filter=scale,fps,format,pad,transpose,null
   --enable-muxer=mp4,webm,ogg
-  --enable-encoder=libx264,libvorbis,libopus,libmp3lame
+  --enable-encoder=libx264
 
-  --enable-gpl                 # Enable GPL license
+  --enable-gpl                                    # Enable GPL license (required for libx264)
 )
 
 EM_PKG_CONFIG_PATH=$PKG_CONFIG_PATH emconfigure ./configure "${CONFIG_ARGS[@]}"
