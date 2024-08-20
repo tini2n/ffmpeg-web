@@ -8,32 +8,33 @@ SOURCE_FILES="libpostproc/postprocess.c libpostproc/version.c fftools/ffmpeg_mux
 LIBRARIES="-lavfilter -lavformat -lavcodec -lswscale -lavutil -lm -logg $HOME/emsdk/deps/x264/lib/libx264.a"
 
 ARGS=(
+  -v
   ${INCLUDE_PATHS}
   ${LIBRARY_PATHS}
   -Qunused-arguments
   -o wasm/dist/ffmpeg.js
   ${SOURCE_FILES}
   ${LIBRARIES}
-  # -O3                              # Enable code optimisation
-  # -pthread                         # Do not use pthread. SharedArrayBuffer issue
-  -Wno-deprecated-declarations       # Suppress deprecated declarations
-  -sWASM_BIGINT                      # enable big int support
-  -sUSE_SDL=2                        # use emscripten SDL2 lib port
-  -sMODULARIZE                       # not compatible with --proxy-to-worker
-  -sEXPORT_NAME="$EXPORT_NAME"
-  -sINITIAL_MEMORY=32MB              # 64 MB initial memory
-  -sALLOW_MEMORY_GROWTH              # Allow memory growth
+  -O0                               # Enable code optimisation
+  # -pthread                          # Do not use pthread. SharedArrayBuffer issue
+  -Wno-deprecated-declarations        # Suppress deprecated declarations
+  -s WASM_BIGINT                      # enable big int support
+  -s USE_SDL=2                        # use emscripten SDL2 lib port
+  -s MODULARIZE                       # not compatible with --proxy-to-worker
+  -s EXPORT_NAME="$EXPORT_NAME"
+  -s INITIAL_MEMORY=67108864          # 64 MB initial memory
+  -s TOTAL_MEMORY=134217728           # 128 MB total memory
+  -s ALLOW_MEMORY_GROWTH              # Allow memory growth
 
   --profiling
-  -sSTACK_OVERFLOW_CHECK=2           # enable stack overflow check
-  -sASSERTIONS=2                     # enable assertions (useful for debugging)
-  -sSTACK_SIZE=10MB
-  -sTOTAL_MEMORY=512MB
-  -sPTHREAD_POOL_SIZE=1
+  -s STACK_OVERFLOW_CHECK=2           # enable stack overflow check
+  -s ASSERTIONS=2                     # enable assertions (useful for debugging)
+  -s STACK_SIZE=5MB
+  -s TOTAL_STACK=64MB
+  -s PTHREAD_POOL_SIZE=1
   
   --pre-js pre.js
-  -lworkerfs.js
-  -s EXPORTED_FUNCTIONS="[_main, _exit, _abort, _emscripten_exit_with_live_runtime, _malloc]"
+  -s EXPORTED_FUNCTIONS="[_main, _exit, _abort, _malloc]"
   -s EXPORTED_RUNTIME_METHODS="[callMain, FS, exitJS, setValue, stringToUTF8, lengthBytesUTF8]"
 )
 

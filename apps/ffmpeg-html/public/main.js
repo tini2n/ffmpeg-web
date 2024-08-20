@@ -44,8 +44,8 @@
 
             // webm to mp4
             await ffmpeg.exec([
-                '-nostdin',
-                '-y',
+                // '-nostdin',
+                // '-y',
                 '-loglevel',
                 'debug',
                 '-i',
@@ -60,8 +60,8 @@
                 '23',
                 '-r',
                 '30',
-                '-threads',
-                '0',
+                // '-threads',
+                // '1',
                 outputFileName,
             ]);
 

@@ -46,6 +46,7 @@ const execCommand = async (args: string[], timeout = -1): Promise<number> => {
     if (!ffmpeg) {
         throw new Error('WORKER ERROR: FFmpeg is not loaded');
     }
+    ffmpeg.setTimeout(timeout);
     const ret = ffmpeg.callMain(args);
     ffmpeg.reset();
     return ret;

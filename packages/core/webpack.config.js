@@ -28,10 +28,6 @@ module.exports = {
                     },
                 },
             },
-            {
-                test: /\.wasm$/,
-                type: 'asset/resource',
-            },
         ],
     },
     resolve: {
@@ -40,6 +36,7 @@ module.exports = {
             crypto: false,
             path: false,
             fs: false,
+            perf_hooks: false,
         },
     },
     plugins: [
@@ -47,9 +44,6 @@ module.exports = {
             patterns: [{ from: 'src/wasm/ffmpeg.wasm', to: './' }],
         }),
     ],
-    experiments: {
-        asyncWebAssembly: true,
-    },
     devServer: {
         static: {
             directory: path.join(__dirname, 'dist'),
