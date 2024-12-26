@@ -17,6 +17,8 @@ export enum WORKER_MESSAGE_TYPES {
     FILE_EXISTS = "FILE_EXISTS",
 }
 
+export const CORE_URL = 'https://lab.geen.ee/geenee-ffmpeg/wasm/ffmpeg.js';
+
 export const ERRORS = {
     NOT_LOADED: new Error(
         "ffmpeg is not loaded, call `await ffmpeg.load()` first"

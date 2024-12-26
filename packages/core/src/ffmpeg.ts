@@ -2,8 +2,10 @@
 import { getUniqueID } from './utils';
 import { ERRORS, WORKER_MESSAGE_TYPES } from "./constants";
 
+import FFmpegWorker from './ffmpeg.worker.ts';
+
 export class FFmpeg {
-    #worker: Worker = null;
+    #worker: Worker = new FFmpegWorker();
     #resolves: Callbacks = {};
     #rejects: Callbacks = {};
     #logEventCallbacks = [];
@@ -12,21 +14,27 @@ export class FFmpeg {
     public loaded = false;
 
     constructor() {
-        this.module = null;
+        this.#registerHandlers();
     }
 
-    async load() {
-        if (!this.#worker) {
-            this.#worker = new Worker(/* webpackChunkName: "ffmpeg-worker" */ new URL('./worker.ts', import.meta.url), { type: 'module' });
+    async load(options: { workerPath?: string } = {
+        workerPath: ''
+    }) {
+        const { workerPath } = options;
+        let res;
+
+        try {
+
             this.#registerHandlers();
+            res = await this.#send({ type: WORKER_MESSAGE_TYPES.LOAD });
+            this.loaded = true;
+        } catch (error) {
+            res = false;
+            console.error('FFmpeg: Error loading worker', error);
+        } finally {
+            return res;
         }
 
-        return await this.#send({ type: 'LOAD', data: './wasm/ffmpeg.js' });
-
-        // Uploading as Module flow
-        // (window).createFFmpegCore = ((await import(/* webpackChunkName: "ffmpeg-core" */'./wasm/ffmpeg.js'))).default;
-        // this.module = await (window).createFFmpegCore();
-        // console.log('FFmpeg loaded:', { module: this.module });
     }
 
     #registerHandlers = () => {
@@ -195,32 +203,4 @@ export class FFmpeg {
             this.loaded = false;
         }
     };
-
-    // Caling module directly flow
-    // readFile(path) {
-    //     return this.module.FS.readFile(path);
-    // }
-    // writeFile(path, data) {
-    //     this.module.FS.writeFile(path, data);
-    // }
-    // createDir(path) {
-    //     this.module.FS.mkdir(path);
-    // }
-    // deleteDir(path) {
-    //     this.module.FS.rmdir(path);
-    // }
-    // deleteFile(path) {
-    //     this.module.FS.unlink(path);
-    // }
-    // listFiles(path) {
-    //     return this.module.FS.readdir(path);
-    // }
-    // fileExists(path) {
-    //     try {
-    //         this.module.FS.lookupPath(path);
-    //         return true;
-    //     } catch (e) {
-    //         return false;
-    //     }
-    // }
 }

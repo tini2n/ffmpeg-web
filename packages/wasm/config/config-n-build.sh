@@ -11,8 +11,8 @@ export PKG_CONFIG_PATH=$EMSDK/deps/ogg/lib/pkgconfig:$EMSDK/deps/vorbis/lib/pkgc
 # Clean previous builds
 emmake make clean
 
-CFLAGS="-DTHREADS_DISABLED -O0" # Add "-O3" for optimisation
-LDFLAGS="$CFLAGS -s INITIAL_MEMORY=67108864 -s MAXIMUM_MEMORY=134217728 -s ALLOW_MEMORY_GROWTH" # 33554432 bytes = 32 MB
+CFLAGS="-DTHREADS_DISABLED -O3" # Add "-O3" for optimisation
+LDFLAGS="$CFLAGS -s INITIAL_MEMORY=134217728 -s MAXIMUM_MEMORY=536870912 -s ALLOW_MEMORY_GROWTH" # 128 MB, 512 MB
 
 # configure FFMpeg with Emscripten
 CONFIG_ARGS=(
@@ -39,35 +39,7 @@ CONFIG_ARGS=(
 
   --disable-all                                   # Disable all components
 
-  --disable-stripping                             # Disable stripping (for debugging)
-  --disable-programs                              # Disable programs (ffmpeg, ffplay, ffprobe)
-  --disable-doc                                   # Disable documentation components
-
-  --disable-pthreads                              # Disable pthreads (SharedArrayBuffer issue)
-  --disable-w32threads
-  --disable-os2threads
-
-  --disable-network                               # Disable networking if not needed
-  --disable-hwaccels                              # Disable hardware accelerations
-  --disable-avdevice                              # Disable libavdevice
-  --disable-postproc                              # Disable libpostproc
-  
-  --enable-avcodec                                # Enable core codec library (needed for libx264)
-  --enable-avformat                               # Enable core format library (needed for reading and writing containers)
-  --enable-avfilter                               # Enable filtering support (required for video scaling and format conversion)
-  --enable-swscale                                # Enable software scaling (for resizing and pixel format conversions)
-
-  --enable-libx264                                # Enable x264 library (H.264 video encoder)
-  # --enable-protocol=file                          # Enable file protocol (needed for input/output)
-  --enable-parser=opus,vp9,vp8,vorbis             # Enable Opus and VP9 parsers (for webm)
-
-  --enable-decoder=vp9,vp8,h264,opus,vorbis,aac,pcm_s16le
-  --enable-demuxer=matroska,mov
-  --enable-filter=scale,fps,format,pad,transpose,null
-  --enable-muxer=mp4,webm,ogg
-  --enable-encoder=libx264
-
-   # Disable CPU-specific optimizations that are irrelevant to WebAssembly
+  # Disable CPU-specific optimizations that are irrelevant to WebAssembly
   --disable-mmx                                  # Disable MMX
   --disable-mmxext                               # Disable MMXEXT
   --disable-sse                                  # Disable SSE
@@ -82,11 +54,37 @@ CONFIG_ARGS=(
   --disable-fma4                                 # Disable FMA4
   --disable-i686                                 # Disable i686-specific optimizations
 
+  --disable-stripping                             # Disable stripping (for debugging)
+  --disable-programs                              # Disable programs (ffmpeg, ffplay, ffprobe)
+  --disable-doc                                   # Disable documentation components
+
+  --disable-pthreads                              # Disable pthreads (SharedArrayBuffer issue)
+  --disable-w32threads
+  --disable-os2threads
+
+  --disable-network                               # Disable networking if not needed
+  --disable-hwaccels                              # Disable hardware accelerations
+  --disable-avdevice                              # Disable libavdevice
+  --disable-postproc                              # Disable libpostproc
+
   # Other options
   --disable-safe-bitstream-reader                 # Disable safe bitstream reader
   --disable-bsfs                                  # Disable bitstream filters (if not needed)
-  --disable-protocols                             # Disable all protocols
-  --enable-protocol=file                          # Enable only file protocol (for input/output)
+  
+  --enable-avcodec                                # Enable core codec library (needed for libx264)
+  --enable-avformat                               # Enable core format library (needed for reading and writing containers)
+  --enable-avfilter                               # Enable filtering support (required for video scaling and format conversion)
+  --enable-swscale                                # Enable software scaling (for resizing and pixel format conversions)
+
+  --enable-libx264                                # Enable x264 library (H.264 video encoder)
+  --enable-protocol=file                          # Enable file protocol (needed for input/output)
+  --enable-parser=opus,vp9,vp8,vorbis             # Enable Opus and VP9 parsers (for webm)
+
+  --enable-decoder=vp9,vp8,opus,vorbis,aac,pcm_s16le
+  --enable-demuxer=matroska,mov
+  --enable-filter=setpts,trim,atrim,scale,fps,format,pad,transpose,null
+  --enable-muxer=mp4,webm
+  --enable-encoder=libx264
 
   --enable-gpl                                    # Enable GPL license (required for libx264)
 )

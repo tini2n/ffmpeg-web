@@ -1,10 +1,21 @@
-# Use an official emscripten image as the base image
-FROM emscripten/emsdk:3.1.64
+FROM emscripten/emsdk:3.1.64 AS emsdk-base
 
-# Set environment variables
-ENV EMSDK /emsdk
-ENV PATH $PATH:/emsdk:/emsdk/upstream/emscripten
-ENV EMCC_WASM_BACKEND 1
+# Default arguments
+ARG TARGET=recorder
+ARG EMSCRIPTEN_VERSION=3.1.64
+ARG FFMPEG_VERSION=n5.1.4
+
+RUN echo "Building for TARGET=${TARGET}"
+RUN echo "Using EMSCRIPTEN_VERSION=${EMSCRIPTEN_VERSION}"
+RUN echo "Using FFMPEG_VERSION=${FFMPEG_VERSION}"
+
+ENV INSTALL_DIR=/opt
+ENV FFMPEG_DIR=/src/ffmpeg
+
+ENV CFLAGS="-I$INSTALL_DIR/include $CFLAGS"
+ENV CXXFLAGS="$CFLAGS"
+ENV EM_PKG_CONFIG_PATH=$EM_PKG_CONFIG_PATH:$INSTALL_DIR/lib/pkgconfig:/emsdk/upstream/emscripten/system/lib/pkgconfig
+ENV PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$EM_PKG_CONFIG_PATH
 
 # Install dependencies
 RUN apt-get update && \
@@ -12,19 +23,29 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://git.ffmpeg.org/ffmpeg.git /src
+RUN ls -la
+RUN pwd
+RUN which emcc
+RUN emcc --version
+RUN which pkg-config
+RUN pkg-config --version
+RUN bash
 
+RUN git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg && \
+    cd ffmpeg && \
+    git checkout ${FFMPEG_VERSION}
+
+WORKDIR /opt
+RUN ls -la
+
+WORKDIR /src/ffmpeg
 
 RUN ls -la
 
-# Create and set the working directory
-WORKDIR /src
+COPY ./builds/Makefile configs.mk
+COPY ./builds/${TARGET}/** ./
+COPY ./builds/deps/** ./deps/
 
-# Copy the Makefile and other necessary files
-COPY Makefile .
+RUN ls -la
 
-# Run the Emscripten environment
-# RUN source /emsdk/emsdk_env.sh
-
-# Build FFmpeg
-RUN make
+RUN make -f configs.mk ${TARGET}

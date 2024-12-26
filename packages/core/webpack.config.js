@@ -1,13 +1,12 @@
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 
 module.exports = {
     entry: './src/index.ts',
     output: {
-        filename: '[name].js',
-        chunkFilename: '[name].js',
+        filename: 'index.js',
         path: path.resolve(__dirname, 'dist'),
-        publicPath: '/dist/',
         library: 'FFmpegWeb',
         libraryTarget: 'umd',
         clean: true,
@@ -15,16 +14,28 @@ module.exports = {
     module: {
         rules: [
             {
-                test: /\.ts$/,
-                use: 'ts-loader',
-                exclude: /node_modules/,
-            },
-            {
                 test: /\.worker\.ts$/,
                 use: {
                     loader: 'worker-loader',
                     options: {
-                        filename: '[name].[hash].js',
+                        inline: 'no-fallback',
+                    },
+                },
+            },
+            {
+                test: /\.ts$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: [
+                            '@babel/preset-env',
+                            '@babel/preset-typescript',
+                        ],
+                        plugins: [
+                            '@babel/plugin-proposal-class-properties',
+                            '@babel/plugin-proposal-private-methods',
+                        ],
                     },
                 },
             },
@@ -39,16 +50,22 @@ module.exports = {
             perf_hooks: false,
         },
     },
-    plugins: [
-        new CopyWebpackPlugin({
-            patterns: [{ from: 'src/wasm/ffmpeg.wasm', to: './' }],
-        }),
-    ],
+    plugins: [],
+    optimization: {
+        splitChunks: {
+            chunks: 'all',
+        },
+        minimize: true,
+        minimizer: [
+            new TerserPlugin({
+                extractComments: false,
+            }),
+        ],
+    },
     devServer: {
         static: {
             directory: path.join(__dirname, 'dist'),
         },
-        compress: true,
         port: 3001,
     },
 };

@@ -7,21 +7,24 @@
         "start": "webpack serve --mode development",
         "clean": "rimraf dist",
         "build:esm": "tsc -p tsconfig.json",
-        "build:umd": "webpack --mode production",
-        "build": "yarn run clean && yarn run build:esm && yarn run build:umd"
+        "build:umd": "webpack --mode production --stats-children",
+        "build": "yarn run clean && yarn run build:umd"
     },
     "dependencies": {
         "@types/node": "^22.2.0",
-        "@types/uuid": "^10.0.0",
-        "sabayon": "^0.5.2"
+        "@types/uuid": "^10.0.0"
     },
     "devDependencies": {
         "@babel/core": "^7.25.2",
-        "@babel/preset-env": "^7.25.3",
+        "@babel/plugin-proposal-class-properties": "^7.18.6",
+        "@babel/plugin-proposal-private-methods": "^7.18.6",
+        "@babel/preset-env": "^7.25.4",
+        "@babel/preset-typescript": "^7.24.7",
         "babel-loader": "^9.1.3",
         "copy-webpack-plugin": "^12.0.2",
         "file-loader": "^6.2.0",
         "rimraf": "^5.0.1",
+        "terser-webpack-plugin": "^5.3.10",
         "ts-loader": "^9.5.1",
         "typescript": "^5.5.4",
         "webpack": "^5.93.0",

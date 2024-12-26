@@ -14,7 +14,6 @@
     });
 
     await ffmpeg.exec(['-version']);
-
     await ffmpeg.createDir('/working');
 
     const fileInput = document.getElementById('inputFile');
@@ -44,24 +43,20 @@
 
             // webm to mp4
             await ffmpeg.exec([
-                // '-nostdin',
-                // '-y',
                 '-loglevel',
                 'debug',
+                '-ss',
+                '00:00:00.050',
                 '-i',
                 inputFileName,
-                '-preset',
-                'ultrafast',
                 '-c:v',
                 'libx264',
                 '-c:a',
                 'copy',
-                '-crf',
-                '23',
+                '-preset',
+                'ultrafast',
                 '-r',
                 '30',
-                // '-threads',
-                // '1',
                 outputFileName,
             ]);
 
