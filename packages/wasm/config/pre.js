@@ -1,94 +1,75 @@
-var Module = {
-  print: function(text) {
-    console.log('stdout: ' + text);
-  },
-  printErr: function(text) {
-    console.error('stderr: ' + text);
-  },
-  locateFile: function(path, prefix) {
-    console.log('[Engeenee | FFmpeg]: pre.js locateFile', {path, prefix});
-    if (path.endsWith('.wasm')) {
-      return 'https://lab.geen.ee/geenee-ffmpeg/core/' + path;
-    }
-
-    return path;
-  },
-  noInitialRun: true,
-  onRuntimeInitialized: function() {
-    console.log('FFmpeg: Runtime initialized');
-  }
-};
-
-Module["EXIT_RUNTIME"] = 0;
-Module["INVOKE_RUN"] = 0;
+Module['EXIT_RUNTIME'] = 0;
+Module['INVOKE_RUN'] = 0;
 
 const NULL = 0;
 const SIZE_I32 = Uint32Array.BYTES_PER_ELEMENT;
-const DEFAULT_ARGS = ["./ffmpeg", "-nostdin", "-y"];
+const DEFAULT_ARGS = ['./ffmpeg', '-nostdin', '-y'];
 
-Module["NULL"] = NULL;
-Module["SIZE_I32"] = SIZE_I32;
-Module["DEFAULT_ARGS"] = DEFAULT_ARGS;
+Module['NULL'] = NULL;
+Module['SIZE_I32'] = SIZE_I32;
+Module['DEFAULT_ARGS'] = DEFAULT_ARGS;
 
 /**
  * Variables
  */
 
-Module["ret"] = -1;
-Module["timeout"] = -1;
-Module["logger"] = () => {};
-Module["progress"] = () => {};
+Module['ret'] = -1;
+Module['timeout'] = -1;
+Module['logger'] = () => {
+};
+Module['progress'] = () => {
+};
 
 /**
  * Functions
  */
 
 function stringToPtr(str) {
-  const len = Module["lengthBytesUTF8"](str) + 1;
-  const ptr = Module["_malloc"](len);
-  Module["stringToUTF8"](str, ptr, len);
+    const len = Module['lengthBytesUTF8'](str) + 1;
+    const ptr = Module['_malloc'](len);
+    Module['stringToUTF8'](str, ptr, len);
 
-  return ptr;
+    return ptr;
 }
 
 function stringsToPtr(strs) {
-  const len = strs.length;
-  const ptr = Module["_malloc"](len * SIZE_I32);
-  for (let i = 0; i < len; i++) {
-    Module["setValue"](ptr + SIZE_I32 * i, stringToPtr(strs[i]), "i32");
-  }
+    const len = strs.length;
+    const ptr = Module['_malloc'](len * SIZE_I32);
+    for (let i = 0; i < len; i++) {
+        Module['setValue'](ptr + SIZE_I32 * i, stringToPtr(strs[i]), 'i32');
+    }
 
-  return ptr;
+    return ptr;
 }
 
 function print(message) {
-  Module["logger"]({ type: "stdout", message });
+    Module['logger']({ type: 'stdout', message });
 }
 
 function printErr(message) {
-  if (!message.startsWith("Aborted(native code called abort())"))
-    Module["logger"]({ type: "stderr", message });
+    if (!message.startsWith('Aborted(native code called abort())'))
+        Module['logger']({ type: 'stderr', message });
 }
 
 function setLogger(logger) {
-  Module["logger"] = logger;
+    Module['logger'] = logger;
 }
 
 function setTimeout(timeout) {
-  Module["timeout"] = timeout;
+    Module['timeout'] = timeout;
 }
 
 function setProgress(handler) {
-  Module["progress"] = handler;
+    Module['progress'] = handler;
 }
 
 function receiveProgress(progress, time) {
-  Module["progress"]({ progress, time });
+    Module['progress']({ progress, time });
 }
 
 function reset() {
-  Module["ret"] = -1;
-  Module["timeout"] = -1;
+    Module['ret'] = -1;
+    Module['timeout'] = -1;
 }
 
 /**
@@ -122,14 +103,14 @@ function reset() {
 //   return prefix + path;
 // }
 
-Module["stringToPtr"] = stringToPtr;
-Module["stringsToPtr"] = stringsToPtr;
-Module["print"] = print;
-Module["printErr"] = printErr;
+Module['stringToPtr'] = stringToPtr;
+Module['stringsToPtr'] = stringsToPtr;
+Module['print'] = print;
+Module['printErr'] = printErr;
 // Module["locateFile"] = _locateFile;
 
-Module["setLogger"] = setLogger;
-Module["setTimeout"] = setTimeout;
-Module["setProgress"] = setProgress;
-Module["reset"] = reset;
-Module["receiveProgress"] = receiveProgress;
+Module['setLogger'] = setLogger;
+Module['setTimeout'] = setTimeout;
+Module['setProgress'] = setProgress;
+Module['reset'] = reset;
+Module['receiveProgress'] = receiveProgress;

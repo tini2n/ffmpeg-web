@@ -5,7 +5,9 @@
     const ffmpeg = new FFmpeg();
     console.log('Loading FFmpeg module...', ffmpeg);
 
-    await ffmpeg.load();
+    await ffmpeg.load({
+        coreURL: 'https://lab.geen.ee/geenee-ffmpeg/core/ffmpeg.js',
+    });
 
     ffmpeg.on('log', (log) => {
         log && log.type === 'stdout'

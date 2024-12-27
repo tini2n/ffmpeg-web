@@ -1,28 +1,44 @@
 // @ts-nocheck
-import { WORKER_MESSAGE_TYPES, CORE_URL } from './constants';
-
-console.log('FFmpeg Worker imported');
+import { WORKER_MESSAGE_TYPES, DEFAULT_CORE_URL } from './constants';
 
 let ffmpeg: any;
 
-const load = async (coreURL: string = ''): Promise<boolean> => {
+const load = async (options: {coreURL: string, wasmURL: string}, ): Promise<boolean> => {
+    let { coreURL } = options;
+
     if (!coreURL) {
-        coreURL = CORE_URL;
+        coreURL = DEFAULT_CORE_URL;
     }
 
     try {
         importScripts(coreURL);
     } catch (error) {
-        (self).createFFmpegCore = ((await import(/* webpackIgnore: true */ coreURL))).default;
+        (self).createFFmpegCore = (
+            await import(/* webpackIgnore: true */ coreURL)
+        ).default;
 
         if (!(self as WorkerGlobalScope).createFFmpegCore) {
-            console.error('[Engeenee | FFmpeg]: Error in Worker: Failed to load FFmpeg-CORE:', error);
+            console.error('[Engeenee | FFmpeg]: Error in Worker: Failed to load FFmpeg CORE:', error);
         }
 
         return false;
     }
 
-    ffmpeg = await (self as any).createFFmpegCore();
+    ffmpeg = await (self as any).createFFmpegCore({
+        locateFile: (path: string) => {
+            if (path.endsWith('.wasm')) {
+                if (options.wasmURL) {
+                    return options.wasmURL;
+                }
+
+                return coreURL.replace('ffmpeg.js', 'ffmpeg.wasm');
+            }
+            return path;
+        },
+    }).then((module: any) => {
+        console.log('[Engeenee | FFmpeg]: FFmpeg Core module loaded:', module);
+        return module;
+    });
 
     ffmpeg.setLogger((data) =>
         self.postMessage({ type: WORKER_MESSAGE_TYPES.LOG, data })

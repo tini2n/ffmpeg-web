@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { getUniqueID } from './utils';
-import { ERRORS, WORKER_MESSAGE_TYPES } from "./constants";
+import { DEFAULT_CORE_URL, ERRORS, WORKER_MESSAGE_TYPES } from './constants';
 
 import FFmpegWorker from './ffmpeg.worker.ts';
 
@@ -17,22 +17,34 @@ export class FFmpeg {
         this.#registerHandlers();
     }
 
-    async load(options: { workerPath?: string } = {
-        workerPath: ''
-    }) {
-        const { workerPath } = options;
-        let res;
+    async load(options?: {
+        coreURL?: string
+        wasmURL?: string
+    } = {}) {
+        if (!options.coreURL) {
+            // TODO: Log service
+            console.warn('FFmpeg: No coreURL provided, using default');
+        }
+
+        const {
+            coreURL = DEFAULT_CORE_URL,
+            wasmURL,
+        } = options;
+
+        let response;
 
         try {
 
             this.#registerHandlers();
-            res = await this.#send({ type: WORKER_MESSAGE_TYPES.LOAD });
+            response = await this.#send({ type: WORKER_MESSAGE_TYPES.LOAD, data: { coreURL, wasmURL } });
             this.loaded = true;
         } catch (error) {
-            res = false;
+            response = false;
+
+            // TODO: Log service
             console.error('FFmpeg: Error loading worker', error);
         } finally {
-            return res;
+            return response;
         }
 
     }

@@ -23,29 +23,6 @@ Module["ready"] = new Promise((resolve, reject) => {
  }
 });
 
-var Module = {
- print: function(text) {
-  console.log("stdout: " + text);
- },
- printErr: function(text) {
-  console.error("stderr: " + text);
- },
- locateFile: function(path, prefix) {
-  console.log("[Engeenee | FFmpeg]: pre.js locateFile", {
-   path: path,
-   prefix: prefix
-  });
-  if (path.endsWith(".wasm")) {
-   return "https://lab.geen.ee/geenee-ffmpeg/wasm/" + path;
-  }
-  return path;
- },
- noInitialRun: true,
- onRuntimeInitialized: function() {
-  console.log("FFmpeg: Runtime initialized");
- }
-};
-
 Module["EXIT_RUNTIME"] = 0;
 
 Module["INVOKE_RUN"] = 0;
