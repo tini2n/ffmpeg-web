@@ -5,8 +5,13 @@
     const ffmpeg = new FFmpeg();
     console.log('Loading FFmpeg module...', ffmpeg);
 
+    // const coreURL = new URL('./ffmpeg/ffmpeg.js', import.meta.url).href;
+
+
     await ffmpeg.load({
-        coreURL: 'https://lab.geen.ee/geenee-ffmpeg/core/ffmpeg.js',
+        // coreURL: 'https://lab.geen.ee/geenee-ffmpeg/core/ffmpeg.js',
+        // coreURL: './ffmpeg/ffmpeg.js',
+        coreURL: window.location.origin + '/ffmpeg/ffmpeg.js',
     });
 
     ffmpeg.on('log', (log) => {
