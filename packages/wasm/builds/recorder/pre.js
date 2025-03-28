@@ -6,9 +6,9 @@ var Module = {
     console.error('stderr: ' + text);
   },
   locateFile: function(path, prefix) {
-    console.log('[Engeenee | FFmpeg]: pre.js locateFile', {path, prefix});
+    console.log('[FFmpeg]: pre.js locateFile', {path, prefix});
     if (path.endsWith('.wasm')) {
-      return 'https://lab.geen.ee/geenee-ffmpeg/core/' + path;
+      return '.../core/' + path;
     }
 
     return path;
