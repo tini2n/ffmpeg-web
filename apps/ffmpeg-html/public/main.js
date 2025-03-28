@@ -9,7 +9,7 @@
 
 
     await ffmpeg.load({
-        // coreURL: 'https://lab.geen.ee/geenee-ffmpeg/core/ffmpeg.js',
+        // coreURL: '.../ffmpeg.js',
         // coreURL: './ffmpeg/ffmpeg.js',
         coreURL: window.location.origin + '/ffmpeg/ffmpeg.js',
     });
