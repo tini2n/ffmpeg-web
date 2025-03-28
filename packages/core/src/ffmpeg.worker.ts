@@ -36,7 +36,7 @@ const load = async (options: {coreURL: string, wasmURL: string}, ): Promise<bool
             return path;
         },
     }).then((module: any) => {
-        console.log('[Engeenee | FFmpeg]: FFmpeg Core module loaded:', module);
+        console.log('[FFmpeg]: FFmpeg Core module loaded:', module);
         return module;
     });
 
